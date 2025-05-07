@@ -1,91 +1,118 @@
 # Home Server Project
 
-A comprehensive, API-driven home server solution designed to run on a Linux environment, packaged as a Docker container. This server provides functionalities for Ollama LLM management, file hosting, PaaS-like Docker container deployment, user management, and a monitoring dashboard.
-
-For detailed project requirements and planning, please see the `[.cursor/rules/home-server-plan.mdc](mdc:.cursor/rules/home-server-plan.mdc)`.
+A custom-built home server designed to provide API-driven services including Ollama LLM management, file hosting, and a Platform-as-a-Service (PaaS) for deploying Dockerized applications. For comprehensive requirements and planning, please refer to the `[home-server-plan.mdc](mdc:.cursor/rules/home-server-plan.mdc)`.
 
 ## Key Features
 
-- **Ollama LLM Management:** API endpoints to pull, start, chat with, and stop Ollama Large Language Models.
-- **File Hosting:** UI and API-based file uploads with configurable retention periods (10 minutes, 1 hour, 10 hours, 10 days, or indefinitely) and unique shareable URLs.
-- **PaaS / Container Management:** Deploy and manage arbitrary applications packaged as Docker images. The system automatically assigns host ports and provides access URLs.
-- **User Management & Authorization:** Secure initial admin setup, with an admin panel for creating/deleting users and managing their access permissions to specific APIs.
-- **Comprehensive Dashboard:** A web UI to monitor server health, resource utilization (CPU, RAM, disk), and the status of deployed services (Core API, Ollama, PaaS containers, File Hosting).
-- **Secure Access:** All web UIs (Homepage, Admin Panel, Dashboard) protected by HTTP Basic Auth.
+- API-driven management of Ollama Large Language Models (pull, start, chat, stop).
+- Secure file hosting with configurable retention periods (UI and API uploads).
+- Platform-as-a-Service (PaaS) for deploying and managing arbitrary Docker containers.
+- User management with role-based access control for APIs and services (Initial admin setup via interactive script when module loads, data stored in `/app/data`).
+- Basic FastAPI web server implemented with root (`/`) and `/api` endpoints.
+- Centralized dashboard for monitoring server health and service status (Planned).
+- Secure access via HTTPS and authentication (Planned).
 
-## Technology Stack (High-Level - Subject to Finalization)
+## Technology Stack (High-Level)
 
-- **Target Operating System:** Linux (Terminal-only server distribution)
+- **Operating System:** Linux (target), runs in Docker.
 - **Containerization:** Docker
-- **Reverse Proxy:** To be determined (e.g., Nginx, Traefik, Caddy) for SSL termination and request routing.
-- **API Framework:** To be determined (e.g., Python with FastAPI/Flask, Node.js with Express).
-- **Authentication:** HTTP Basic Auth, hashed password storage, SQLite for user/permission data.
-- **Ollama Interaction:** Via Ollama's official local REST API.
-
-For development environment considerations, see `[.cursor/rules/dev-specs.mdc](mdc:.cursor/rules/dev-specs.mdc)`.
+- **Programming Language:** Python 3.11
+- **API Framework:** FastAPI
+- **Web Server:** Uvicorn
+- **Reverse Proxy:** To be selected (e.g., Nginx, Traefik, Caddy) - for SSL termination and request routing.
+- **Authentication:** HTTP Basic Auth (planned), hashed passwords with SHA256.
+- **Database:** SQLite (for user management, stored in `/app/data/home_server.db` within the container).
 
 ## Prerequisites
 
-- Docker (for building and running the server image)
-- Git (for cloning the repository)
-- A Linux server environment (for deployment)
+- Docker
+- Git
 
 ## Setup and Installation
 
 1.  **Clone the repository:**
-
     ```bash
-    git clone <your_repository_url> # Replace with actual URL
+    git clone <repository-url> # Replace with the actual repository URL
     cd home-server
     ```
+2.  **Prepare Data Directory on Host:**
+    Create a directory on your host machine to store persistent application data. This will be mounted into the container.
 
-2.  **Build the Docker image:**
+    ```bash
+    mkdir ./app_data # Or any other path you prefer, e.g., /opt/home-server/data
+    ```
 
+3.  **Build the Docker image:**
+    The `Dockerfile` copies your application code into the image. The image is configured to build for `linux/amd64` by default.
     ```bash
     docker build -t home-server .
     ```
+4.  **Initial Configuration & First Run (Admin Setup):
+    When you run the container for the first time **interactively**, it will attempt an initial admin setup if the marker file (`.admin_created`) is not found in the mounted data volume. You will be prompted in the terminal to create an admin user. This information will be stored in the `home_server.db` file within the container's `/app/data` directory, which is mapped from your host's `./app_data`.
+    **Important:\*\* The interactive prompt for admin setup currently relies on `input()`. This may not function as expected if the container is run in a non-interactive way (e.g. with `-d` without `-it` for the first run). A more robust first-time setup mechanism (e.g., using environment variables for initial admin credentials) is planned.
 
-3.  **Initial Configuration & First Run:**
-    - When running the Docker container for the first time, you will be prompted to set up the master admin user (username and password).
-    - Example command to run the container (ensure to map a persistent volume for data like user database and file uploads):
+    To run interactively for the first setup:
+
     ```bash
-    docker run -d \
-      -p 8080:8080 \ # Replace 8080 with your desired host port for the main app, and the internal container port
-      --name home-server-app \
-      -v home_server_data:/app/data \ # Example volume for persistent data
-      # Add any other necessary environment variables or options here
+    docker run -it --rm \
+      -v $(pwd)/app_data:/app/data \
+      -p 8000:8000 \
+      --name home-server-app-setup \
       home-server
     ```
-    _(Note: Specific port mappings and volume paths will be finalized during development.)_
+
+    - `-it`: Runs the container in interactive mode for the setup prompts.
+    - `--rm`: Removes this setup container when it stops.
+    - `-v $(pwd)/app_data:/app/data`: Mounts the host's `./app_data` directory to `/app/data` inside the container. This is where `main.py` now stores its database and marker file.
+    - `-p 8000:8000`: Maps host port 8000 to container port 8000 where Uvicorn listens.
+
+5.  \*\*Run the Docker container (Detached Mode for Regular Use):
+    After the initial admin setup is complete (or if data already exists in `./app_data`), you can run the container in detached mode:
+    ```bash
+    docker run -d \
+      -v $(pwd)/app_data:/app/data \
+      -p 8000:8000 \
+      --name home-server-app \
+      --restart unless-stopped \
+      home-server
+    ```
+    - The application code runs from within the image. Persistent data is read from/written to the mounted `/app/data` volume.
+    - The server will be accessible on `http://localhost:8000`.
 
 ## Usage
 
-- Access the server's main interface (Homepage/Admin Panel/Dashboard) via your server's domain, e.g., `https://your-server-domain.com/` (once configured with a reverse proxy and SSL).
-- Non-admin users will see links to services they have permission to access.
-- Admin users will have access to the admin panel for user and permission management.
+Once the server is running, you can access its basic API endpoints:
+
+- Root: `http://localhost:8000/`
+- API Root: `http://localhost:8000/api`
+
+FastAPI's automatic interactive API documentation is available at:
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
 ## API Documentation
 
-Detailed API functionalities and endpoint plans are outlined in the `[.cursor/rules/home-server-plan.mdc](mdc:.cursor/rules/home-server-plan.mdc)`.
-As development progresses, dedicated API documentation (e.g., Swagger/OpenAPI or a separate `API_DOCS.md`) may be created.
+Basic API endpoints are now available. FastAPI also provides automatic interactive API documentation (Swagger UI) at `http://localhost:8000/docs` and alternative documentation (ReDoc) at `http://localhost:8000/redoc` when the server is running.
+
+Further API documentation will be provided as endpoints are developed. Reference the detailed API plans in `[home-server-plan.mdc](mdc:.cursor/rules/home-server-plan.mdc)`.
 
 ## Configuration
 
-The server is primarily configured via:
+The application is primarily configured through:
 
-1.  **Initial interactive setup:** For the master admin credentials.
-2.  **Environment variables:** Passed to the Docker container at runtime (e.g., for port settings, external service integrations if any). An `.env.example` file may be provided in the future.
+1.  **Initial interactive setup (on first interactive run):** For the master admin credentials.
+2.  **Persistent Data Volume:** The database (`home_server.db`) and admin marker file (`.admin_created`) are stored in the `/app/data` directory inside the container. This directory should be mounted from a host directory (e.g., `./app_data`) to persist data across container restarts.
+3.  **Environment variables (Future):** Will be used for more granular settings.
 
-Key environment variables will be documented here as they are defined.
+## Dependencies and why
 
-## Development
+- **fastapi:** (Used in `main.py`) A modern, fast (high-performance) web framework for building APIs with Python, based on standard Python type hints. Chosen for its speed, ease of use, and automatic data validation and documentation features (Swagger UI at `/docs`, ReDoc at `/redoc`).
+- **uvicorn:** (Used in `main.py` and `Dockerfile CMD`) An ASGI server, used to run FastAPI applications. It's lightweight and fast. `[standard]` variant includes recommended extras.
+- **Python Standard Library:**
+  - `os`: Used in `main.py` for checking file existence (`os.path.exists`) for the admin marker file.
+  - `sqlite3`: Used in `main.py` for creating and interacting with the SQLite database for user management.
+  - `hashlib`: Used in `main.py` for hashing admin passwords (SHA256) before storing them.
+  - `getpass`: Used in `main.py` to securely read the admin password from the terminal during the initial setup (works best in interactive mode).
 
-(Details to be added. Refer to `[.cursor/rules/dev-specs.mdc](mdc:.cursor/rules/dev-specs.mdc)` for environment notes.)
-
-## Troubleshooting
-
-(Details to be added as common issues and solutions are identified.)
-
-## License
-
-(To be determined. MIT License is a common choice for open-source projects.)
+_(This section will be updated as more dependencies are added and used.)_

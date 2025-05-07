@@ -1,19 +1,28 @@
+# Specify the target platform for the build
+ARG TARGETPLATFORM=linux/amd64
+
 # Use an official Python runtime as a parent image
-FROM python:3.11-slim
+FROM --platform=$TARGETPLATFORM python:3.11-slim
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the dependencies file to the working directory
-COPY requirements.txt .
+# Copy the requirements file into the container at /app
+COPY requirements.txt ./
 
-# Install any needed dependencies specified in requirements.txt
+# Install any needed packages specified in requirements.txt
+# Ensure that any system dependencies for Python packages are installed before this step if needed
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application's code to the working directory
+# Copy the rest of the application code into the container at /app
 COPY . .
 
-# Command to run the application using Uvicorn
-# We'll use port 8000 internally by default for the app
-# The host and port can be overridden by environment variables if needed
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
+# Expose the port the app runs on (Uvicorn will use this)
+EXPOSE 8000
+
+# Define environment variable (example)
+# ENV NAME World
+
+# Run main.py when the container launches.
+# main.py will handle initial setup (if needed) and then start Uvicorn.
+CMD ["python", "main.py"]

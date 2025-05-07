@@ -1,2 +1,8 @@
+# This file will list the Python dependencies for the project.
+# Add one package per line, optionally with version specifiers.
+# Example:
+# flask>=2.0
+# requests
+
 fastapi
 uvicorn[standard] 
