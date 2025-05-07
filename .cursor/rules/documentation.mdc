@@ -1,0 +1,54 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# README.md Documentation Guidelines
+
+This rule outlines the structure and content for the main `README.md` file of the `home-server` project. The `README.md` is the first point of entry for anyone looking to understand, set up, or contribute to the project.
+
+## README.md Structure and Content
+
+The `README.md` should include the following sections:
+
+1.  **Project Title and Overview:**
+    *   Clear title (e.g., "Home Server Project").
+    *   A concise summary of what the project is and its main purpose.
+    *   Link to the detailed `[home-server-plan.mdc](mdc:.cursor/rules/home-server-plan.mdc)` for comprehensive requirements.
+
+2.  **Key Features:**
+    *   A bulleted list highlighting the major functionalities (e.g., API-driven Ollama management, File Hosting, PaaS Docker deployment, User Management, Dashboard).
+    *   Keep descriptions brief and refer to the project plan for full details.
+
+3.  **Technology Stack (High-Level):**
+    *   List the key technologies that will be used (e.g., Linux, Docker, chosen API framework, reverse proxy). This can be updated as decisions in the `@home-server-plan.mdc` are finalized.
+
+4.  **Prerequisites:**
+    *   What a user needs to have installed/configured *before* they can set up this project (e.g., Docker, Git).
+
+5.  **Setup and Installation:**
+    *   Step-by-step instructions on how to get the server running:
+        *   Cloning the repository.
+        *   Building the Docker image (e.g., `docker build -t home-server .`).
+        *   Initial configuration steps (e.g., running the image for the first time to set the admin password and any other essential environment variables).
+        *   How to run the Docker container (e.g., `docker run -d -p <host_port>:<container_port> --name home-server-app <other_options> home-server`). Include placeholders for necessary port mappings and volume mounts.
+
+6.  **Usage:**
+    *   How to access the server's homepage/dashboard (e.g., `https://your-server-domain/`).
+    *   Brief overview of how to use the main features or where to find more detailed instructions (e.g., link to API documentation if separate).
+
+7.  **API Documentation:**
+    *   A brief note on where to find API documentation. This could be:
+        *   Inline within the README for a few key endpoints.
+        *   A separate `API_DOCS.md` file in the repository.
+        *   Link to externally hosted documentation if using a tool like Swagger/OpenAPI.
+    *   Reference the detailed API plans in `[home-server-plan.mdc](mdc:.cursor/rules/home-server-plan.mdc)`.
+8.  **Configuration:**
+    *   Details on how the application is configured, primarily through environment variables passed to the Docker container.
+    *   List key environment variables, their purpose, and example values or where to find them (e.g., `.env.example` if one is created).
+
+9.  **Dependencies and why**
+    * if you import anything, explain why it must be used, where it uses it and so on
+
+This structure will ensure that the `README.md` is comprehensive and helpful.
+after adding any type of content to the codebase, see if it falls under any of the before said categories and write it down in the README.md
