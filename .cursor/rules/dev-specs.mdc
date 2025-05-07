@@ -1,5 +1,5 @@
 ---
-description: It helps anticipate and address Docker compatibility issues due to architectural differences between your ARM-based Mac and the target Linux/amd64 server.
+description: 
 globs: 
 alwaysApply: false
 ---

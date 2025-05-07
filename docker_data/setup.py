@@ -2,19 +2,13 @@ import os
 import sqlite3
 import hashlib
 import getpass # For securely getting password input
-import uvicorn
-from fastapi import FastAPI
+import subprocess
 
 DATA_DIR = "data"
 DB_NAME = os.path.join(DATA_DIR, "home_server.db")
-ADMIN_USER_FILE = os.path.join(DATA_DIR, ".admin_created")
+ADMIN_USER_FILE = ".first_run_done"
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="Home Server API",
-    description="APIs for managing home server functionalities including Ollama, File Hosting, and PaaS.",
-    version="0.1.0"
-)
+
 
 def hash_password(password):
     """Hashes the given password using SHA256."""
@@ -50,7 +44,7 @@ def add_admin_user_to_db(username, password):
         with open(ADMIN_USER_FILE, 'w') as f:
             f.write("Admin user created")
     except sqlite3.IntegrityError:
-        print(f"Admin user '{username}' already exists or another error occurred.")
+        print(f"Admin user '{username}' already exists or another error occurred. how the fuck did this happen? Here is a random flag: `flag(wh4t_4_f4ck1ng_m355)`")
     finally:
         conn.close()
 
@@ -78,27 +72,18 @@ def perform_interactive_admin_setup():
 
     add_admin_user_to_db(admin_username, admin_password)
     print("--- Initial Admin User Setup Complete ---")
+    print("The server will now start automatically.")
+    print("--- Server Starting ---")
+    subprocess.run(["python", "server.py"])
 
-# Ensure data directory and DB tables are ready when module is loaded.
-# This part is non-interactive and safe for Uvicorn import.
-create_data_dir_and_db_tables()
 
-@app.get("/")
-async def read_root():
-    return {"message": "Welcome to the Home Server API!"}
-
-@app.get("/api")
-async def read_api_root():
-    return {"message": "Home Server API - Core Endpoints"}
 
 if __name__ == "__main__":
     # Check if admin setup is needed only when script is run directly.
     if not os.path.exists(ADMIN_USER_FILE):
+        create_data_dir_and_db_tables()
         # This print statement helps confirm if this block is reached.
         print(f"Marker file '{ADMIN_USER_FILE}' not found. Attempting interactive admin setup.")
         perform_interactive_admin_setup()
     else:
         print(f"Admin user already configured (marker file '{ADMIN_USER_FILE}' found).")
-
-    print("Starting Uvicorn server...")
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
