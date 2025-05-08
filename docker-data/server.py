@@ -1,7 +1,10 @@
 from flask import Flask, request
 from server.database import *
 from server.pages import *
+from server.health import *
 app = Flask(__name__)
+
+
 
 @app.get("/")
 def root_api():
@@ -10,6 +13,11 @@ def root_api():
 @app.get("/api/")
 def api():
     return {"message": "Home Server API - Core Endpoints"}
+
+@app.get("/api/health/")
+def health_api():
+    health_status = health_check()
+    return {"message": "Server status: ", "status": health_status}
 
 # TESTED 
 @app.get("/api/users/")

@@ -2,7 +2,7 @@
 FROM --platform=linux/amd64 python:3.11-slim
 
 # Set the working directory in the container
-WORKDIR /app
+WORKDIR /docker-data
 
 # Copy the requirements file into the container at /app
 COPY docker-data/ ./
@@ -23,4 +23,4 @@ EXPOSE 8000
 
 # Run main.py when the container launches.
 # main.py will handle initial setup (if needed) and then start the flask server.
-CMD ["python", "setup.py "]
+CMD ["python", "setup.py"]
