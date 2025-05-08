@@ -78,7 +78,7 @@ def perform_interactive_admin_setup():
 
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     # Check if admin setup is needed only when script is run directly.
     if not os.path.exists(ADMIN_USER_FILE):
         create_data_dir_and_db_tables()
@@ -87,3 +87,5 @@ if __name__ == "__main__":
         perform_interactive_admin_setup()
     else:
         print(f"Admin user already configured (marker file '{ADMIN_USER_FILE}' found).")
+        print("--- Server Starting ---")
+        subprocess.run(["python", "server.py"])

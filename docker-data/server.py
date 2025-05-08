@@ -1,23 +1,26 @@
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 from server.database import *
 from server.pages import *
 from server.health import *
+from api.manual import *
+
 app = Flask(__name__)
 
-
-
-@app.get("/")
-def root_api():
-    return "Hello World"
+# Serve the main dashboard page
+@app.route("/")
+def serve_dashboard():
+    # Assuming server.py is in /docker-data/ and index.html is in /docker-data/pages/dashboard/
+    return send_from_directory('pages/dashboard', 'index.html'), 200
 
 @app.get("/api/")
 def api():
-    return {"message": "Home Server API - Core Endpoints"}
+    return get_manual_api()
+
 
 @app.get("/api/health/")
 def health_api():
     health_status = health_check()
-    return {"message": "Server status: ", "status": health_status}
+    return {"message": "Server status: ", "status": health_status}, 200
 
 # TESTED 
 @app.get("/api/users/")
@@ -26,16 +29,16 @@ def get_users_api():
     if not users:
         return {"message": "No users found"}, 404
     else:
-        return {"message": "Users retrieved successfully", "users": users}
+        return {"message": "Users retrieved successfully", "users": users}, 200
 
 
 @app.get("/api/users/<int:user_id>")
-def get_user_api(user_id):
+def get_user_from_id_api(user_id):
     user = get_user(user_id)
     if not user:
         return {"message": "User with the id " + str(user_id) + " not found"}, 404
     else:
-        return {"message": "User with the id " + str(user_id) + " retrieved successfully", "user": user}
+        return {"message": "User with the id " + str(user_id) + " retrieved successfully", "user": user}, 200
 
 @app.post("/api/users/")
 def create_user_api():
@@ -59,15 +62,6 @@ def update_user_api(user_id):
 def delete_user_api(user_id):
     delete_user(user_id)
     return {"message": "User with the id " + user_id + " deleted successfully"}
-
-
-@app.get("/api/users/")
-def get_users_api():
-    users = get_all_users()
-    if not users:
-        return {"message": "No users found"}, 404
-    else:
-        return {"message": "Users retrieved successfully", "users": users}
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
