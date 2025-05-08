@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Service API Status</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { color: #444; }
+        pre { background-color: #eee; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; }
+        .error { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>File Service API Status</h1>
+        <div id="status-container">
+            <p>Loading system health...</p>
+        </div>
+    </div>
+
+    <script>
+        async function fetchFileServiceHealth() {
+            const statusContainer = document.getElementById('status-container');
+            try {
+                // Assuming the File Service API has a /api/health endpoint
+                // Adjust '/fs/api/health' if the actual endpoint is different
+                const response = await fetch('/fs/api/health'); // Prepended /fs/ as a potential base path for file-service
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                statusContainer.innerHTML = `<p><strong>Status:</strong> Healthy</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                console.error('Error fetching File Service health:', error);
+                statusContainer.innerHTML = `<p class="error">Error fetching system health: ${error.message}</p>`;
+            }
+        }
+
+        window.onload = fetchFileServiceHealth;
+    </script>
+</body>
+</html> 
