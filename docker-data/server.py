@@ -60,7 +60,5 @@ def get_user_api(user_id):
     else:
         return {"message": "User with the id " + str(user_id) + " retrieved successfully", "user": user}
 
-
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
