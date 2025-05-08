@@ -1,0 +1,142 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Shadcn UI Component Integration Guide
+
+This guide summarizes the key steps and learnings for integrating Shadcn UI components into a Next.js project, particularly within a Dockerized environment. It emphasizes that component source code **MUST** be manually obtained directly from the official Shadcn UI documentation.
+
+## 1. Manually Adding Shadcn UI Component Source Code
+
+The **required method** for adding Shadcn UI components is to manually obtain their source code from the official documentation. Do **NOT** use the `npx shadcn-ui@latest add` CLI command, as it may not reliably populate component files, as experienced in this project.
+
+1.  **Navigate to the Official Shadcn UI Documentation**: Go to the [Shadcn UI website](mdc:https:/ui.shadcn.com/docs/components) and find the specific component you wish to add (e.g., Card, Button, Input).
+2.  **Copy the Component Source Code**: On the component's documentation page, there will be a section displaying its source code (usually in `.jsx` or `.tsx` format). Copy this entire code block.
+3.  **Create/Populate Local Component File**: 
+    *   In your project's frontend directory (e.g., `docker-data/frontend/components/ui/`), create a new file for the component (e.g., `card.jsx`, `button.jsx`).
+    *   Paste the copied source code from the official documentation directly into this new file.
+    *   This manual process ensures you have the correct and complete code, as was necessary for the `Card` component in this project ([docker-data/frontend/components/ui/card.jsx](mdc:docker-data/frontend/components/ui/card.jsx)).
+
+(you MUST NOT execute `npx shadcn-ui@latest add <component-name>` no matter what.)
+
+## 2. Essential Utility: `cn` Function
+
+Shadcn UI components rely on a `cn` utility function for conditional class name merging. This function is a dependency of the manually copied component code.
+
+1.  **Create/Verify `lib/utils.js` (or `.jsx`/`.ts`/`.tsx`)**: This file should be in your frontend's `lib` directory (e.g., `docker-data/frontend/lib/utils.js`). It typically contains:
+    ```javascript
+    import { clsx } from "clsx"
+    import { twMerge } from "tailwind-merge"
+
+    export function cn(...inputs) {
+      return twMerge(clsx(inputs))
+    }
+    ```
+2.  **Install Dependencies**: Ensure `clsx` and `tailwind-merge` are installed as project dependencies. Add them to your `package.json` (e.g., in `docker-data/package.json`):
+    ```bash
+    npm install clsx tailwind-merge
+    # or
+    yarn add clsx tailwind-merge
+    ```
+
+## 3. PostCSS Configuration (`postcss.config.js`)
+
+This file configures how Tailwind CSS is processed. It should be in your frontend directory (e.g., `docker-data/frontend/postcss.config.js`).
+
+*   **Syntax**: Use CommonJS (`module.exports`).
+*   **Plugins**:
+    *   Include `autoprefixer`.
+    *   For the Tailwind plugin, use `"@tailwindcss/postcss": {}`. Error messages during this project's setup indicated this specific package was necessary.
+    *   Ensure `@tailwindcss/postcss` is listed in your `package.json` dependencies.
+
+    Example `docker-data/frontend/postcss.config.js`:
+    ```javascript
+    module.exports = {
+      plugins: {
+        "@tailwindcss/postcss": {},
+        "autoprefixer": {},
+      }
+    };
+    ```
+
+## 4. Tailwind CSS Configuration (`tailwind.config.js`)
+
+This file configures Tailwind CSS itself. It should be in your frontend directory (e.g., `docker-data/frontend/tailwind.config.js`).
+
+*   **Content Paths**: Crucially, the `content` array must include paths to all files where you use Tailwind CSS classes (including the manually added Shadcn UI components).
+    Example for a project structured with `pages` and `components` directories directly under `frontend`:
+    ```javascript
+    /** @type {import('tailwindcss').Config} */
+    module.exports = {
+      // ... other configurations like darkMode, theme, plugins ...
+      content: [
+        "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+        "./components/**/*.{js,ts,jsx,tsx,mdx}",
+      ],
+      theme: {
+        extend: {
+          // Your theme extensions for Shadcn components
+        },
+      },
+      plugins: [require("tailwindcss-animate")],
+    };
+    ```
+    Refer to [tailwind.config.js](mdc:docker-data/frontend/tailwind.config.js) for the project's specific setup.
+
+## 5. Global Styles (`globals.css`)
+
+Ensure your main CSS file (e.g., `docker-data/frontend/styles/globals.css`) includes the Tailwind directives:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS variables for Shadcn UI theming are also typically defined here */
+```
+This file is typically imported in `_app.js` (or `_app.tsx`).
+
+## 6. Dependencies (`package.json`)
+
+Review your main `package.json` (e.g., [docker-data/package.json](mdc:docker-data/package.json)) to ensure all necessary packages are listed:
+
+*   `next`, `react`, `react-dom`
+*   `tailwindcss`, `postcss`, `autoprefixer`
+*   `@tailwindcss/postcss` (required for the PostCSS setup)
+*   `clsx`, `tailwind-merge` (for the `cn` utility)
+*   `tailwindcss-animate` (common Shadcn UI plugin)
+*   Any Radix UI packages (e.g., `@radix-ui/react-slot`) that are imported by the manually copied Shadcn UI component code. These must be explicitly installed.
+
+## 7. Importing and Using Components
+
+In your pages or other components (e.g., [docker-data/frontend/pages/index.js](mdc:docker-data/frontend/pages/index.js)), import the manually added Shadcn UI components using the alias defined in your `jsconfig.json` or `tsconfig.json` (usually `@/components/ui/...`):
+
+```javascript
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"; 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+// ... use components in your JSX ...
+```
+
+## 8. Docker Environment Considerations
+
+If developing within a Docker container:
+
+*   **`.dockerignore`**: Crucially, use a [`.dockerignore`](mdc:.dockerignore) file at your project root to prevent your local `node_modules` from being copied into the Docker image. This ensures the `node_modules` installed *inside* Docker are used.
+    Key line: `**/node_modules` or `docker-data/node_modules`.
+*   **`Dockerfile` Build Steps**:
+    1.  Copy only `package.json`.
+    2.  Run `npm install` in the Docker context.
+    3.  *Then*, copy the rest of your application code. The `.dockerignore` file is vital here.
+    Refer to the project's [Dockerfile](mdc:Dockerfile) for specific implementation.
+
+By following these steps, particularly the manual sourcing of component code, integrating Shadcn UI components should be successful. Always refer to the official Shadcn UI documentation for the most up-to-date component code and dependencies.
