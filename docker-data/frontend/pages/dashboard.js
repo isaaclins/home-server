@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -34,22 +35,29 @@ export default function DashboardPage() {
   if (!user) {
     // This will be briefly shown while redirecting or if token decoding fails
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        {/* Consider adding a Shadcn Spinner or Skeleton component here for better UX */}
         <p>Loading or unauthorized...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
-      <div className="p-8 bg-white shadow-lg rounded-xl max-w-md w-full text-center">
-        <h1 className="text-3xl font-bold mb-4">Welcome to the Dashboard!</h1>
-        <p className="text-lg mb-2">Hello, <span className="font-semibold">{user.username}</span>!</p>
-        <p className="text-md mb-6">Your admin status is: <span className="font-semibold">{user.isAdmin ? 'Administrator' : 'User'}</span>.</p>
-        <Button onClick={handleLogout} variant="destructive">
-          Logout
-        </Button>
-      </div>
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
+      <Card className="w-full max-w-md text-center">
+        <CardHeader>
+          <CardTitle className="text-3xl">Welcome to the Dashboard!</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-lg">Hello, <span className="font-semibold">{user.username}</span>!</p>
+          <p className="text-md">Your admin status is: <span className="font-semibold">{user.isAdmin ? 'Administrator' : 'User'}</span>.</p>
+        </CardContent>
+        <CardFooter className="flex justify-center">
+          <Button onClick={handleLogout} variant="destructive">
+            Logout
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 } 

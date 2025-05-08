@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -45,40 +46,50 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="p-8 bg-white shadow-md rounded-lg w-full max-w-sm">
-        <h1 className="text-2xl font-semibold text-center mb-6">Login</h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
-            <Input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              placeholder="Enter your username"
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="Enter your password"
-              className="mt-1"
-            />
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" className="w-full">
-            Login
-          </Button>
-        </form>
-      </div>
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="space-y-1 text-center">
+          <CardTitle className="text-2xl">Login</CardTitle>
+          <CardDescription>
+            Enter your username and password to access your dashboard.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="username" /*className="block text-sm font-medium text-gray-700"*/ >Username</label>
+              <Input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                placeholder="Enter your username"
+                //className="mt-1"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="password" /*className="block text-sm font-medium text-gray-700"*/>Password</label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="Enter your password"
+                //className="mt-1"
+              />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" className="w-full">
+              Login
+            </Button>
+          </form>
+        </CardContent>
+        {/* <CardFooter>
+          {/* You can add footer content here if needed, e.g., "Forgot password?" link *\/}
+        </CardFooter> */}
+      </Card>
     </div>
   );
 } 
