@@ -11,12 +11,24 @@ def get_db_connection():
 
 # TODO: Add error handling & SQL injection protection
 def execute_query(query, params=()):
-    """Executes a query on the database."""
+    """Executes a query on the database.
+    For SELECT queries, it returns a list of rows (as dictionaries).
+    For other queries (INSERT, UPDATE, DELETE), it commits the transaction and returns None.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(query, params)
-    conn.commit()
-    conn.close()
+    
+    if query.strip().upper().startswith("SELECT"):
+        results = cursor.fetchall() 
+        conn.close()
+        # Convert Row objects to dicts to make them JSON serializable easily
+        return [dict(row) for row in results] if results else []
+    else:
+        # For INSERT, UPDATE, DELETE, etc.
+        conn.commit()
+        conn.close()
+        return None
 
 # Hash a password
 def hash_password(password):
@@ -25,9 +37,7 @@ def hash_password(password):
 
 def get_user(user_id):
     """Returns a user by their ID."""
-    user = execute_query('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-    print(user)
-    return user
+    return execute_query('SELECT * FROM users WHERE id = ?', (user_id,))
 
 # Create a user
 def create_user(username, password, is_admin):
@@ -47,9 +57,4 @@ def delete_user(user_id):
 # Get all users
 def get_all_users():
     """Returns all users from the database."""
-    return execute_query('SELECT * FROM users').fetchall()
-
-
-# Create a user
-def create_user(username, password, is_admin):
-    execute_query('INSERT INTO users (username, password, is_admin) VALUES (?, ?, ?)', (username, password, is_admin))
+    return execute_query('SELECT * FROM users')

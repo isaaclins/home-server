@@ -5,7 +5,7 @@ FROM --platform=linux/amd64 python:3.11-slim
 WORKDIR /app
 
 # Copy the requirements file into the container at /app
-COPY docker_data/ ./
+COPY docker-data/ ./
 
 # Install any needed packages specified in requirements.txt
 # Ensure that any system dependencies for Python packages are installed before this step if needed

@@ -1,6 +1,6 @@
-from flask import Flask
+from flask import Flask, request
 from server.database import *
-
+from server.pages import *
 app = Flask(__name__)
 
 @app.get("/")
@@ -11,13 +11,15 @@ def root_api():
 def api():
     return {"message": "Home Server API - Core Endpoints"}
 
+# TESTED 
 @app.get("/api/users/")
 def get_users_api():
-    users = execute_query('SELECT * FROM users')
+    users = get_all_users()
     if not users:
-        return {"message": "No users found"}
+        return {"message": "No users found"}, 404
     else:
         return {"message": "Users retrieved successfully", "users": users}
+
 
 @app.post("/api/users/")
 def create_user_api():
@@ -30,7 +32,6 @@ def create_user_api():
 
 @app.put("/api/users/{user_id}/")
 def update_user_api(user_id):
-    
     body = request.json
     username = body.get("username")
     password = body.get("password")
@@ -43,14 +44,13 @@ def delete_user_api(user_id):
     delete_user(user_id)
     return {"message": "User with the id " + user_id + " deleted successfully"}
 
-@app.get("/api/users/{user_id}/")
+@app.get("/api/users/<int:user_id>")
 def get_user_api(user_id):
     user = get_user(user_id)
-    print(user)
     if not user:
-        return {"message": "User with the id " + user_id + " not found"}
+        return {"message": "User with the id " + str(user_id) + " not found"}, 404
     else:
-        return {"message": "User with the id " + user_id + " retrieved successfully", "user": user}
+        return {"message": "User with the id " + str(user_id) + " retrieved successfully", "user": user}
 
 
 
