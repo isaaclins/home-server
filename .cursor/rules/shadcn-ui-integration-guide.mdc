@@ -7,11 +7,11 @@ alwaysApply: true
 
 This guide summarizes the key steps and learnings for integrating Shadcn UI components into a Next.js project, particularly within a Dockerized environment. It emphasizes that component source code **MUST** be manually obtained directly from the official Shadcn UI documentation.
 
-## 1. Manually Adding Shadcn UI Component Source Code
+## 1. Adding Shadcn UI Component Source Code
 
-The **required method** for adding Shadcn UI components is to manually obtain their source code from the official documentation. Do **NOT** use the `npx shadcn-ui@latest add` CLI command, as it may not reliably populate component files, as experienced in this project.
+The **required method** for adding Shadcn UI components is to obtain their source code from the official documentation under https://ui.shadcn.com/docs . Do **NOT** use the `npx shadcn-ui@latest add` CLI command, as it may not reliably populate component files, as experienced in this project.
 
-1.  **Navigate to the Official Shadcn UI Documentation**: Go to the [Shadcn UI website](mdc:https:/ui.shadcn.com/docs/components) and find the specific component you wish to add (e.g., Card, Button, Input).
+1.  **Navigate to the Official Shadcn UI Documentation**: Go to the site https://ui.shadcn.com/docs and find the specific component you wish to add (e.g., Card, Button, Input). (You have the ability to do that via the docs that are indexed.)
 2.  **Copy the Component Source Code**: On the component's documentation page, there will be a section displaying its source code (usually in `.jsx` or `.tsx` format). Copy this entire code block.
 3.  **Create/Populate Local Component File**: 
     *   In your project's frontend directory (e.g., `docker-data/frontend/components/ui/`), create a new file for the component (e.g., `card.jsx`, `button.jsx`).
