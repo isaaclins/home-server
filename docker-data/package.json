@@ -1,0 +1,17 @@
+{
+  "name": "home-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\"",
+    "dev:backend": "cd /app/docker-data/backend && nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "cors": "^2.8.5",
+    "concurrently": "^9.1.2",
+    "nodemon": "^3.1.4",
+    "sqlite3": "^5.1.7",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
