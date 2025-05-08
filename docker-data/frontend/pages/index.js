@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { useAuthContext } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
+  const { isAuthenticated, loading } = useAuthContext();
 
   useEffect(() => {
     // Redirect to dashboard if already logged in
@@ -17,6 +20,13 @@ export default function LoginPage() {
       router.push('/dashboard');
     }
   }, [router]);
+
+  useEffect(() => {
+    // Only redirect if loading is complete and user is not authenticated.
+    if (!loading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, loading, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,6 +54,15 @@ export default function LoginPage() {
       setError('An unexpected error occurred. Please try again.');
     }
   };
+
+  // Render loading state or null while checking auth to prevent flash of content
+  if (loading || !isAuthenticated) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>Loading...</p> {/* Or a proper spinner */}
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">

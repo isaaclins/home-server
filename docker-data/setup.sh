@@ -28,8 +28,10 @@ create_data_dir_and_db_tables() {
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE,
     hashed_password TEXT NOT NULL,
-    is_admin INTEGER NOT NULL DEFAULT 0
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 EOF
     echo "Data directory and database tables checked/created at '$DB_NAME'."
@@ -38,17 +40,18 @@ EOF
 add_admin_user_to_db() {
     local username="$1"
     local password="$2"
+    local email="$3"
     local hashed_pass
 
     hashed_pass=$(hash_password "$password")
 
     # Capture potential error messages from sqlite3 by redirecting stderr to stdout
     # Then capture the exit status
-    output=$(sqlite3 "$DB_NAME" "INSERT INTO users (username, hashed_password, is_admin) VALUES ('$username', '$hashed_pass', 1);" 2>&1)
+    output=$(sqlite3 "$DB_NAME" "INSERT INTO users (username, email, hashed_password, is_admin) VALUES ('$username', '$email', '$hashed_pass', 1);" 2>&1)
     insert_status=$?
 
     if [ $insert_status -eq 0 ]; then
-        echo "Admin user '$username' created successfully."
+        echo "Admin user '$username' created successfully with email '$email'."
         # Create the marker file
         echo "Admin user created" > "$ADMIN_USER_FILE"
     else
@@ -62,9 +65,9 @@ add_admin_user_to_db() {
 }
 
 perform_interactive_admin_setup() {
-    clear
     echo "--- Initial Admin User Setup ---"    
     local admin_username
+    local admin_email
     while true; do
         read -r -p "Enter desired admin username: " admin_username
         if [ -z "$admin_username" ]; then
@@ -74,6 +77,16 @@ perform_interactive_admin_setup() {
         break
     done
     
+    while true; do
+        read -r -p "Enter admin email address: " admin_email
+        # Basic email validation regex (not exhaustive but better than nothing)
+        if [[ "$admin_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            break
+        else
+            echo "Invalid email format. Please try again."
+        fi
+    done
+
     local admin_password
     local admin_password_confirm
     while true; do
@@ -92,9 +105,9 @@ perform_interactive_admin_setup() {
         fi
     done
 
-    add_admin_user_to_db "$admin_username" "$admin_password"
+    add_admin_user_to_db "$admin_username" "$admin_password" "$admin_email"
     echo "--- Initial Admin User Setup Complete ---"
-    clear
+
 }
 
 # --- Main Execution ---

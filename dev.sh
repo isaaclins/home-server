@@ -8,7 +8,7 @@ open -a Docker && while ! docker info > /dev/null 2>&1; do sleep 1; done
 docker rm -f home-server 2>/dev/null
 
 # Then, build the image
-docker build -t home-server-image .
+docker build --no-cache -t home-server-image .
 
 # Then, run the container
 docker run -it -p 3000:3000 -p 3001:3001 home-server-image

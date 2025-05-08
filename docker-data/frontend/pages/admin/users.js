@@ -5,76 +5,82 @@ import { Button } from "@/components/ui/button";
 import UserTable from "@/components/admin/UserTable";
 import UserForm from "@/components/admin/UserForm";
 import DeleteUserDialog from "@/components/admin/DeleteUserDialog";
+import { getUserFromToken, getAuthToken } from '@/lib/auth'; // Import the auth utility and getAuthToken
 
-// Mock auth hook - replace with your actual auth logic
-// const useAuth = () => {
-//   // IMPORTANT: Replace this with your actual authentication logic.
-//   // This should check a session, token, etc., and determine if the user is an admin.
-//   // For example, using NextAuth.js:
-//   // import { useSession } from "next-auth/react";
-//   // const { data: session, status } = useSession();
-//   // const isAdmin = session?.user?.role === 'admin';
-//   // const loading = status === 'loading';
-//   const [isAdmin, setIsAdmin] = useState(false); // Default to false, auth should determine
-//   const [loading, setLoading] = useState(true); // Default to true until auth check completes
-  
-//   // useEffect(() => {
-//   //   // Simulate async auth check
-//   //   setTimeout(() => {
-//   //     // Replace with actual check
-//   //     // For now, we can toggle this for testing admin/non-admin views
-//   //     setIsAdmin(true); // or false
-//   //     setLoading(false);
-//   //   }, 1000);
-//   // }, []);
-
-//   return { isAdmin, loading };
-// };
-
-// KEEPING MOCK FOR NOW TO ENSURE PAGE WORKS, but highlighting it needs replacement
+// Actual useAuth Hook
 const useAuth = () => {
-  const [isAdmin, setIsAdmin] = useState(true); // Placeholder: REMOVE AND REPLACE
-  const [loading, setLoading] = useState(false); // Placeholder: REMOVE AND REPLACE
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    toast.warning("Authentication is mocked. Replace useAuth hook with actual logic.", { duration: 10000 });
-  },[])
-  return { isAdmin, loading };
+    const userData = getUserFromToken();
+    setUser(userData);
+    setLoading(false);
+    if (!userData) {
+      toast.error("You are not logged in or your session has expired. Please login.");
+    } else if (!userData.isAdmin) {
+      toast.error("You do not have administrative privileges.");
+    }
+  }, []);
+
+  return { user, isAdmin: user?.isAdmin || false, loading };
 };
 
 // Mock API functions - replace with your actual API calls
-const API_BASE_URL = '/api'; // Example, adjust to your actual API base path
+const API_BASE_URL = 'http://localhost:3001/api'; // Ensure this matches your backend port if run locally without Docker networking between services
+
+async function handleApiResponse(response) {
+  if (!response.ok) {
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      // If response is not JSON, use status text
+      errorData = { message: response.statusText };
+    }
+    const errorMessage = errorData?.message || `Request failed with status ${response.status}`;
+    console.error("API Error:", errorMessage, "Full response:", errorData);
+    throw new Error(errorMessage);
+  }
+  // If response has no content (e.g. 204 for DELETE), return a success indication
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return { success: true }; 
+  }
+  return response.json();
+}
 
 const fetchUsers = async () => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token not found. Please login.");
+
   try {
-    // const response = await fetch(`${API_BASE_URL}/users`);
-    // if (!response.ok) throw new Error('Failed to fetch users');
-    // return await response.json();
-    // Mocking a successful response for now:
-    console.log("Mock API: Fetching users...");
-    return new Promise(resolve => setTimeout(() => resolve([
-      { id: '1', username: 'admin_user', email: 'admin@example.com', isAdmin: true, createdAt: new Date().toISOString() },
-      { id: '2', username: 'normal_user', email: 'user@example.com', isAdmin: false, createdAt: new Date().toISOString() },
-    ]), 100));
+    const response = await fetch(`${API_BASE_URL}/users`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return handleApiResponse(response);
   } catch (error) {
     console.error("fetchUsers error:", error);
-    throw error; // Re-throw to be caught by caller
+    // toast.error(error.message || "Failed to load users."); // Toasting is done in loadUsers() function
+    throw error;
   }
 };
 
 const createUserAPI = async (userData) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token not found. Please login.");
+
   try {
-    // const response = await fetch(`${API_BASE_URL}/users`, {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify(userData),
-    // });
-    // if (!response.ok) {
-    //   const errorData = await response.json().catch(() => ({ message: 'Failed to create user' }));
-    //   throw new Error(errorData.message || 'Failed to create user');
-    // }
-    // return await response.json();
-    console.log("Mock API: Creating user:", userData);
-    return new Promise(resolve => setTimeout(() => resolve({ ...userData, id: Date.now().toString(), createdAt: new Date().toISOString() }), 500));
+    const response = await fetch(`${API_BASE_URL}/users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(userData),
+    });
+    return handleApiResponse(response);
   } catch (error) {
     console.error("createUserAPI error:", error);
     throw error;
@@ -82,19 +88,19 @@ const createUserAPI = async (userData) => {
 };
 
 const updateUserAPI = async (userId, userData) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token not found. Please login.");
+
   try {
-    // const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
-    //   method: 'PUT',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify(userData),
-    // });
-    // if (!response.ok) {
-    //   const errorData = await response.json().catch(() => ({ message: 'Failed to update user' }));
-    //   throw new Error(errorData.message || 'Failed to update user');
-    // }
-    // return await response.json();
-    console.log(`Mock API: Updating user ${userId}:`, userData);
-    return new Promise(resolve => setTimeout(() => resolve({ id: userId, ...userData }), 500));
+    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(userData),
+    });
+    return handleApiResponse(response);
   } catch (error) {
     console.error("updateUserAPI error:", error);
     throw error;
@@ -102,17 +108,17 @@ const updateUserAPI = async (userId, userData) => {
 };
 
 const deleteUserAPI = async (userId) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("Authentication token not found. Please login.");
+
   try {
-    // const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
-    //   method: 'DELETE',
-    // });
-    // if (!response.ok) {
-    //   const errorData = await response.json().catch(() => ({ message: 'Failed to delete user' }));
-    //   throw new Error(errorData.message || 'Failed to delete user');
-    // }
-    // return { id: userId }; // Or whatever your API returns on successful delete
-    console.log(`Mock API: Deleting user ${userId}`);
-    return new Promise(resolve => setTimeout(() => resolve({ id: userId }), 500));
+    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return handleApiResponse(response);
   } catch (error) {
     console.error("deleteUserAPI error:", error);
     throw error;
@@ -121,7 +127,7 @@ const deleteUserAPI = async (userId) => {
 
 
 export default function UserManagementPage() {
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, loading: authLoading, user } = useAuth();
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 

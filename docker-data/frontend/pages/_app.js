@@ -1,12 +1,16 @@
 import '../styles/globals.css';
 import { Toaster } from 'sonner';
+import Layout from '@/components/Layout';
+import { AuthProvider } from '@/context/AuthContext';
 
 function MyApp({ Component, pageProps }) {
   return (
-    <>
-      <Component {...pageProps} />
-      <Toaster richColors position="top-right" />
-    </>
+    <AuthProvider>
+      <Layout>
+        <Toaster richColors position="top-right" />
+        <Component {...pageProps} />
+      </Layout>
+    </AuthProvider>
   );
 }
 

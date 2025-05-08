@@ -4,7 +4,6 @@
 set -e
 
 
-clear
 chmod +x setup.sh
 ./setup.sh
 
