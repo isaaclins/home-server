@@ -22,5 +22,5 @@ EXPOSE 8000
 # ENV NAME World
 
 # Run main.py when the container launches.
-# main.py will handle initial setup (if needed) and then start Uvicorn.
-CMD ["python", "setup.py"]
+# main.py will handle initial setup (if needed) and then start the flask server.
+CMD ["python", "setup.py "]
