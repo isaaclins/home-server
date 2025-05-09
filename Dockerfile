@@ -1,9 +1,9 @@
 # Use an official Node.js runtime as a parent image
 FROM --platform=linux/amd64 node:22-slim
 
-# Install necessary dependencies: git (for npm), sqlite3 (for setup.sh), coreutils (for sha256sum in setup.sh)
+# Install necessary dependencies: git (for npm), sqlite3 (for setup.sh), coreutils (for sha256sum in setup.sh), curl (for ollama)
 RUN apt-get update && \
-    apt-get install -y sqlite3 git coreutils && \
+    apt-get install -y sqlite3 git coreutils curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

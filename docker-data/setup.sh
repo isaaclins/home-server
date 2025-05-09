@@ -108,6 +108,11 @@ perform_interactive_admin_setup() {
 
     add_admin_user_to_db "$admin_username" "$admin_password" "$admin_email"
     echo "--- Initial Admin User Setup Complete ---"
+    echo "Admin user '$admin_username' created successfully with email '$admin_email'."
+    echo "You can now login with the following credentials:"
+    echo "Username: $admin_username"
+    echo "Password: $admin_password"
+    echo "Email: $admin_email"
 
 }
 

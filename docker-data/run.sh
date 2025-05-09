@@ -40,3 +40,12 @@ EXIT_CODE=$?
 echo "A server process has exited with code $EXIT_CODE. Shutting down other servers."
 
 exit $EXIT_CODE 
+
+# ---OLLAMA SETUP---
+
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+mkdir -p /.ollama && chmod 777 /.ollama
+
+

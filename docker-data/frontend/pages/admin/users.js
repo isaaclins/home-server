@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -241,7 +242,12 @@ export default function UserManagementPage() {
               <CardTitle>User Management</CardTitle>
               <CardDescription>Create, view, edit, and delete user accounts.</CardDescription>
             </div>
-            <Button onClick={handleOpenCreateUserForm}>Add New User</Button>
+            <div className="flex gap-2">
+              <Link href="/ollama-chat" passHref>
+                <Button variant="outline">Go to Ollama Chat</Button>
+              </Link>
+              <Button onClick={handleOpenCreateUserForm}>Add New User</Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
