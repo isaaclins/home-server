@@ -65,6 +65,7 @@ add_admin_user_to_db() {
 }
 
 perform_interactive_admin_setup() {
+    clear
     echo "--- Initial Admin User Setup ---"    
     local admin_username
     local admin_email

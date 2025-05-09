@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useAuthContext } from '@/context/AuthContext'; // Import the context hook
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from "@/components/theme-toggle"; // Import ThemeToggle
 
 export default function Layout({ children }) {
   const { user, isAdmin, logout, loading } = useAuthContext(); // Use context
@@ -44,6 +45,7 @@ export default function Layout({ children }) {
                 </Link>
               )
             )}
+            <ThemeToggle /> {/* Add ThemeToggle button */}
           </div>
         </nav>
       </header>
