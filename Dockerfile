@@ -1,5 +1,5 @@
 # Use an official Node.js runtime as a parent image
-FROM --platform=linux/amd64 node:20-slim
+FROM --platform=linux/amd64 node:22-slim
 
 # Install necessary dependencies: git (for npm), sqlite3 (for setup.sh), coreutils (for sha256sum in setup.sh)
 RUN apt-get update && \
