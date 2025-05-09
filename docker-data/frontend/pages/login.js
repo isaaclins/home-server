@@ -22,6 +22,7 @@ const API_BASE_URL = 'http://localhost:3001/api'; // Ensure this matches your ba
 
 export default function LoginPage() {
   const { login } = useAuthContext();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -55,6 +56,7 @@ export default function LoginPage() {
 
       if (result.token) {
         login(result.token);
+        router.push('/dashboard');
       } else {
         throw new Error('Login failed. No token received.');
       }

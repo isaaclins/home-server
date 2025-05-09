@@ -11,48 +11,49 @@ export default function Layout({ children }) {
   // }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="bg-gray-800 text-white p-4 shadow-md">
-        <nav className="container mx-auto flex justify-between items-center">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      <header className="border-b sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <nav className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
           <div className="flex items-center space-x-4">
-            <Link href="/" className="text-xl font-bold hover:text-gray-300">
+            <Link href="/" className="text-xl font-bold">
               HomeServer
             </Link>
-            <Link href="/dashboard" className="hover:text-gray-300">
-              Dashboard
-            </Link>
-            {/* Use isAdmin from context */}
-            {isAdmin && (
-              <Link href="/admin/users" className="hover:text-gray-300">
+            {user && (
+              <Link href="/dashboard" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+                Dashboard
+              </Link>
+            )}
+            {user && isAdmin && (
+              <Link href="/admin/users" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
                 User Management
               </Link>
             )}
           </div>
           <div className="flex items-center space-x-4">
-            {/* Use user and logout from context */}
             {user ? (
               <>
                 <span className="text-sm">Welcome, {user.username}!</span>
-                <Button variant="outline" size="sm" onClick={logout} className="text-white border-white hover:bg-gray-700">
+                <Button variant="outline" size="sm" onClick={logout}>
                   Logout
                 </Button>
               </>
             ) : (
-              // Show login only if not loading auth state
               !loading && (
-                <Link href="/login" className="hover:text-gray-300">
-                  Login
+                <Link href="/login">
+                  <Button variant="outline" size="sm">Login</Button>
                 </Link>
               )
             )}
           </div>
         </nav>
       </header>
-      <main className="flex-grow container mx-auto p-4">
+      <main className="flex-grow container mx-auto p-4 md:p-6">
         {children}
       </main>
-      <footer className="bg-gray-200 text-center p-4 text-sm text-gray-700">
-        © {new Date().getFullYear()} HomeServer Project
+      <footer className="border-t">
+        <div className="container mx-auto py-4 px-4 md:px-6 text-center text-sm text-muted-foreground">
+          © {new Date().getFullYear()} HomeServer Project
+        </div>
       </footer>
     </div>
   );
