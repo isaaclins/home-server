@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +6,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuthContext } from '@/context/AuthContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Label } from "@/components/ui/label";
+import { toast } from 'sonner';
 
 // This page will let you chat with Ollama models
 // It will be a simple chat interface with a text input and a send button
@@ -31,54 +44,128 @@ export default function OllamaChatPage() {
   const [message, setMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
-  const [models, setModels] = useState([]);
+  const [localOllamaModels, setLocalOllamaModels] = useState([]);
+  const [externalModelsForPulling, setExternalModelsForPulling] = useState([]);
+  const [isAddModelDialogOpen, setIsAddModelDialogOpen] = useState(false);
+  const [dialogModelTagSelections, setDialogModelTagSelections] = useState({});
+  const [clearChatOnModelChange, setClearChatOnModelChange] = useState(false);
+  const [modelToPull, setModelToPull] = useState('');
+  const [isPullingModel, setIsPullingModel] = useState(false);
+
+  const previousSelectedModelRef = useRef();
+  useEffect(() => {
+    if (previousSelectedModelRef.current && previousSelectedModelRef.current !== selectedModel) {
+      const currentModelDetails = managedModels.find(m => m.id === selectedModel);
+      toast.info(`Switched to model: ${currentModelDetails?.name || selectedModel}`);
+      if (clearChatOnModelChange) {
+        setChatHistory([]);
+        toast.info("Chat history cleared.");
+      }
+    }
+    previousSelectedModelRef.current = selectedModel;
+  }, [selectedModel, clearChatOnModelChange, managedModels]);
+
+  const managedModels = useMemo(() => {
+    let availableModels = [];
+    if (isAdmin || (user && user.roles && user.roles.includes('_ollama_user'))) {
+      availableModels = [...localOllamaModels];
+    } else {
+      availableModels = [];
+    }
+
+    if (selectedModel && !availableModels.some(m => m.id === selectedModel)) {
+        if (availableModels.length > 0) {
+            setTimeout(() => setSelectedModel(availableModels.length > 0 ? availableModels[0].id : ''), 0);
+        } else {
+            setTimeout(() => setSelectedModel(''), 0);
+        }
+    }
+    return availableModels;
+  }, [localOllamaModels, isAdmin, user, selectedModel]);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
+      return;
     }
     // TODO: Add check for _ollama_user role once user object structure is known
     // if (!loading && user && !user.roles.includes('_ollama_user') && !isAdmin) {
     //   router.push('/unauthorized'); // Or some other appropriate page
+    //   return;
     // }
 
-    // Fetch models from local Ollama API
-    const getModels = async () => {
+    const getAllModelsData = async () => {
       try {
-        const response = await fetch('/api/ollama/models');
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        const localResponse = await fetch('/api/ollama/models');
+        if (!localResponse.ok) {
+          throw new Error(`HTTP error fetching local models: ${localResponse.status}`);
         }
-        const data = await response.json();
-        setModels(data);
-        if (data.length > 0) {
-          setSelectedModel(data[0].id); // Set default model to the first in the list
+        const localData = await localResponse.json();
+        setLocalOllamaModels(localData);
+
+        if (!selectedModel && localData.length > 0) {
+            // Defer this to the managedModels effect or a separate effect watching localOllamaModels
+            // to ensure managedModels has been calculated based on roles.
+            // setSelectedModel(localData[0].id); // Simplified for now, will be refined by managedModels effect
         }
+
+        if (localData.length === 0 && isAdmin) {
+          try {
+            const externalResponse = await fetch('/api/ollama/available-external-models.js');
+            if (!externalResponse.ok) {
+              toast.error("Could not fetch external model list. Please enter model names manually to pull (e.g., 'gemma:latest').");
+              setExternalModelsForPulling([]);
+              throw new Error(`HTTP error fetching external models: ${externalResponse.status}`);
+            }
+            const externalData = await externalResponse.json();
+            setExternalModelsForPulling(externalData.map(model => ({
+              name: model.name,
+              description: model.description,
+              tags: model.tags || [],
+              extras: model.extras || [],
+              id: model.name 
+            })));
+          } catch (error) {
+            console.error("Failed to fetch or process external models for pulling:", error);
+            setExternalModelsForPulling([]);
+          }
+        } else if (!isAdmin) {
+           setExternalModelsForPulling([]);
+        }
+
       } catch (error) {
-        console.error("Failed to fetch models:", error);
-        // Optionally, set some error state here to display to the user
-        setModels([]); // Clear models or set to an empty array on error
+        console.error("Failed to fetch local models:", error);
+        setLocalOllamaModels([]);
+        if (isAdmin) setExternalModelsForPulling([]); 
       }
     };
 
-    getModels();
+    if (!loading && user) {
+        getAllModelsData();
+    }
+
   }, [user, loading, router, isAdmin]);
+
+  useEffect(() => {
+    if (!selectedModel && managedModels.length > 0) {
+      setSelectedModel(managedModels[0].id);
+    } else if (selectedModel && managedModels.length === 0) {
+      setSelectedModel('');
+    }
+  }, [managedModels, selectedModel]);
 
   const handleSendMessage = async () => {
     if (!message.trim() || !selectedModel) return;
 
     const newUserMessage = { role: 'user', content: message };
-    // Add user message to chat history immediately for responsiveness
     setChatHistory(prev => [...prev, { sender: 'user', text: message }]);
-    setMessage(''); // Clear input field
+    setMessage('');
 
-    // Prepare the messages array to send to the API (Ollama expects a specific format)
-    // It should include previous messages for context, if any.
     const apiMessages = chatHistory.map(chat => ({
       role: chat.sender === 'user' ? 'user' : 'assistant', 
       content: chat.text
     }));
-    apiMessages.push(newUserMessage); // Add the new user message
+    apiMessages.push(newUserMessage);
 
     try {
       const response = await fetch('/api/ollama/chat', {
@@ -88,8 +175,8 @@ export default function OllamaChatPage() {
         },
         body: JSON.stringify({
           model: selectedModel,
-          messages: apiMessages, // Send the history for context
-          stream: true, // Request a streaming response
+          messages: apiMessages,
+          stream: true,
         }),
       });
 
@@ -102,15 +189,12 @@ export default function OllamaChatPage() {
         let accumulatedResponse = '';
         let firstChunk = true;
 
-        // Add a placeholder for the bot's response
-        // This will be updated as chunks stream in
         setChatHistory(prev => [...prev, { sender: 'bot', text: '' }]);
 
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
 
-          // Each `value` can contain multiple JSON objects separated by newlines
           const lines = value.split('\n').filter(line => line.trim() !== '');
 
           for (const line of lines) {
@@ -118,7 +202,6 @@ export default function OllamaChatPage() {
               const parsedChunk = JSON.parse(line);
               if (parsedChunk.message && parsedChunk.message.content) {
                 accumulatedResponse += parsedChunk.message.content;
-                // Update the last message in chatHistory (the bot's response)
                 setChatHistory(prev => {
                   const newHistory = [...prev];
                   newHistory[newHistory.length - 1] = { sender: 'bot', text: accumulatedResponse };
@@ -126,10 +209,8 @@ export default function OllamaChatPage() {
                 });
               }
               if (parsedChunk.done) {
-                // Streaming is complete
-                // You can handle finalization here if needed, e.g., logging total duration
                 console.log("Streaming complete:", parsedChunk);
-                return; // Exit the loop
+                return;
               }
             } catch (e) {
               console.error("Error parsing stream chunk:", line, e);
@@ -137,7 +218,6 @@ export default function OllamaChatPage() {
           }
         }
       } else {
-        // Fallback for non-streaming or if body is null (should not happen with stream: true)
         const data = await response.json();
         setChatHistory(prev => [...prev, { sender: 'bot', text: data.message?.content || "No response content" }]);
       }
@@ -145,6 +225,69 @@ export default function OllamaChatPage() {
     } catch (error) {
       console.error('Failed to send message or process stream:', error);
       setChatHistory(prev => [...prev, { sender: 'bot', text: 'Error: Could not connect to the model.' }]);
+    }
+  };
+
+  const handlePullModel = async (modelNameToPull) => {
+    const finalModelName = typeof modelNameToPull === 'string' ? modelNameToPull : modelToPull;
+    if (!finalModelName.trim()) {
+      toast.error("Please enter a model name to pull (e.g., mistral:latest).");
+      return;
+    }
+    setIsPullingModel(true);
+    toast.info(`Starting to pull model: ${finalModelName}... This may take a while.`);
+
+    try {
+      const response = await fetch('/api/ollama/pull', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: finalModelName }),
+      });
+
+      if (response.body) {
+        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+        let lastStatus = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const lines = value.split('\n').filter(line => line.trim() !== '');
+          for (const line of lines) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.status && parsed.status !== lastStatus) {
+                console.log(`Pull progress for ${finalModelName}: ${parsed.status}`);
+                lastStatus = parsed.status;
+              }
+              if (parsed.error) {
+                throw new Error(parsed.error);
+              }
+            } catch (e) { /* ignore lines that are not json or don't have status */ }
+          }
+        }
+      }
+
+      if (!response.ok) {
+        let errorMsg = `Failed to pull model. Status: ${response.status}`;
+        try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorMsg;
+        } catch (e) { /* ignore if error response is not json */ }
+        throw new Error(errorMsg);
+      }
+      
+      toast.success(`Model ${finalModelName} pulled successfully! Refreshing local models...`);
+      setModelToPull('');
+      const localModelsResponse = await fetch('/api/ollama/models');
+      const localModelsData = await localModelsResponse.json();
+      setLocalOllamaModels(localModelsData);
+
+    } catch (error) {
+      console.error("Failed to pull model:", error);
+      toast.error(`Error pulling model ${finalModelName}: ${error.message}`);
+    } finally {
+      setIsPullingModel(false);
     }
   };
 
@@ -156,6 +299,91 @@ export default function OllamaChatPage() {
         <CardHeader>
           <CardTitle>Ollama Chat</CardTitle>
           <CardDescription>Chat with available Ollama models.</CardDescription>
+          {isAdmin && externalModelsForPulling.length > 0 && (
+            <Dialog open={isAddModelDialogOpen} onOpenChange={(isOpen) => {
+              setIsAddModelDialogOpen(isOpen);
+              if (!isOpen) setDialogModelTagSelections({});
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="mt-2">Pull Models from Registry</Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px] md:max-w-[700px] lg:max-w-[900px]">
+                <DialogHeader>
+                  <DialogTitle>Pull Models from Registry</DialogTitle>
+                  <DialogDescription>
+                    Select a model and a specific tag (if available) to pull to your local Ollama instance.
+                    Pulling a model will download it to your server.
+                  </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
+                  <div className="space-y-3">
+                    {externalModelsForPulling.map((model) => {
+                      const modelIdentifier = model.name;
+                      const currentSelectedTag = dialogModelTagSelections[modelIdentifier] || (model.tags.length > 0 ? model.tags[0] : null);
+
+                      return (
+                        <div key={model.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border rounded-md">
+                          <div className="flex-grow">
+                            <p className="text-sm font-semibold text-foreground">{model.name}</p>
+                            {model.description && <p className="text-xs text-muted-foreground mt-1 pr-2">{model.description}</p>}
+                          </div>
+                          
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {model.tags && model.tags.length > 0 && (
+                              <Select 
+                                value={currentSelectedTag}
+                                onValueChange={(tag) => {
+                                  setDialogModelTagSelections(prev => ({ ...prev, [modelIdentifier]: tag }));
+                                }}
+                              >
+                                <SelectTrigger className="w-[150px] h-9 text-xs">
+                                  <SelectValue placeholder="Select tag" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {model.tags.map(tag => (
+                                    <SelectItem key={tag} value={tag} className="text-xs">
+                                      {tag} (Pull as {model.name}:{tag})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const modelToPullWithTag = currentSelectedTag 
+                                  ? `${model.name}:${currentSelectedTag}` 
+                                  : model.name;
+                                handlePullModel(modelToPullWithTag);
+                                setIsAddModelDialogOpen(false);
+                              }}
+                              disabled={isPullingModel}
+                            >
+                              Pull
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setIsAddModelDialogOpen(false)}>Close</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+          <div className="flex items-center space-x-2 mt-2">
+            <Checkbox
+              id="clear-chat-toggle"
+              checked={clearChatOnModelChange}
+              onCheckedChange={setClearChatOnModelChange}
+            />
+            <Label htmlFor="clear-chat-toggle" className="text-sm font-medium">
+              Clear chat history on model change
+            </Label>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -165,11 +393,15 @@ export default function OllamaChatPage() {
                 <SelectValue placeholder="Select a model" />
               </SelectTrigger>
               <SelectContent>
-                {models.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name}
-                  </SelectItem>
-                ))}
+                {managedModels.length > 0 ? (
+                  managedModels.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-models" disabled>No models available</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -201,10 +433,30 @@ export default function OllamaChatPage() {
           </div>
         </CardContent>
         {isAdmin && (
-          <CardFooter className="flex flex-col space-y-2 pt-4 border-t">
+          <CardFooter className="flex flex-col space-y-4 pt-4 border-t items-start">
             <h3 className="text-lg font-semibold">Admin Controls</h3>
-            <Button variant="outline" size="sm">Pull New Model</Button>
-            <Button variant="destructive" size="sm">Delete Selected Model</Button>
+            
+            <div className="space-y-2 w-full">
+              <Label htmlFor="pull-model-input" className="text-sm font-medium">Pull New Model to Local Ollama</Label>
+              <div className="flex gap-2">
+                <Input 
+                  id="pull-model-input"
+                  type="text"
+                  value={modelToPull}
+                  onChange={(e) => setModelToPull(e.target.value)}
+                  placeholder="e.g., llama2:latest or mistral"
+                  className="flex-grow"
+                  disabled={isPullingModel}
+                />
+                <Button onClick={() => handlePullModel(modelToPull)} disabled={isPullingModel || !modelToPull.trim()}>
+                  {isPullingModel ? "Pulling..." : "Pull Model"}
+                </Button>
+              </div>
+            </div>
+
+            <Button variant="destructive" size="sm" disabled={isPullingModel}>
+              Delete Selected Model (Local Ollama)
+            </Button>
           </CardFooter>
         )}
       </Card>

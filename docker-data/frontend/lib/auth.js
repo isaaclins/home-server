@@ -31,7 +31,12 @@ export function getUserFromToken() {
       removeAuthToken(); // Clean up expired token
       return null;
     }
-    return { username: decoded.username, isAdmin: decoded.isAdmin };
+    // Ensure roles are extracted, defaulting to an empty array if not present
+    return { 
+      username: decoded.username, 
+      isAdmin: decoded.isAdmin || false, // Ensure isAdmin defaults to false if not present
+      roles: decoded.roles || [] // Extract roles, default to empty array
+    };
   } catch (error) {
     console.error('Invalid token:', error);
     removeAuthToken(); // Clean up invalid token

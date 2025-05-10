@@ -17,6 +17,14 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
+// Define manageable roles
+export const AVAILABLE_ROLES = [
+  { id: '_ollama_user', label: 'Ollama Chat User', description: 'Can access and use the Ollama chat service.' },
+  { id: '_general_admin_access', label: 'General Admin Access', description: 'Can access general administrative sections.' },
+  // Add more roles here as needed, e.g.:
+  // { id: '_file_service_user', label: 'File Service User', description: 'Can access the file service.' },
+];
+
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters");
 
 const userSchema = z.object({
@@ -24,6 +32,7 @@ const userSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().optional(),
   isAdmin: z.boolean().default(false),
+  roles: z.array(z.string()).default([]).optional(),
 });
 
 const refinedUserSchema = userSchema.superRefine((data, ctx) => {
@@ -63,6 +72,7 @@ export default function UserForm({ open, onOpenChange, onSubmit, initialData }) 
       email: '',
       password: '',
       isAdmin: false,
+      roles: [],
       isEditing: false,
     },
   });
@@ -75,6 +85,7 @@ export default function UserForm({ open, onOpenChange, onSubmit, initialData }) 
           email: initialData.email || '',
           password: '',
           isAdmin: initialData.isAdmin || false,
+          roles: initialData.roles || [],
           isEditing: true,
         });
       } else {
@@ -83,6 +94,7 @@ export default function UserForm({ open, onOpenChange, onSubmit, initialData }) 
           email: '',
           password: '',
           isAdmin: false,
+          roles: [],
           isEditing: false,
         });
       }
@@ -108,6 +120,7 @@ export default function UserForm({ open, onOpenChange, onSubmit, initialData }) 
         email: '',
         password: '',
         isAdmin: false,
+        roles: [],
         isEditing: false,
       });
     }
@@ -189,6 +202,46 @@ export default function UserForm({ open, onOpenChange, onSubmit, initialData }) 
               </label>
             </div>
             {errors.isAdmin && <p className="col-span-3 col-start-2 text-xs text-destructive mt-1">{errors.isAdmin.message}</p>}
+          </div>
+
+          {/* Roles Selection Section */}
+          <div className="grid grid-cols-4 items-start gap-4 pt-2">
+            <Label className="text-right col-span-1 pt-1">Roles</Label>
+            <div className="col-span-3 space-y-2">
+              {AVAILABLE_ROLES.map((role) => (
+                <div key={role.id} className="flex items-start space-x-2">
+                  <Checkbox
+                    id={`role-${role.id}`}
+                    checked={control._formValues.roles?.includes(role.id)}
+                    onCheckedChange={(checked) => {
+                      const currentRoles = control._formValues.roles || [];
+                      let newRoles;
+                      if (checked) {
+                        newRoles = [...currentRoles, role.id];
+                      } else {
+                        newRoles = currentRoles.filter((r) => r !== role.id);
+                      }
+                      reset({ ...control._formValues, roles: newRoles });
+                    }}
+                    className="mt-0.5"
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor={`role-${role.id}`}
+                      className="text-sm font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {role.label}
+                    </label>
+                    {role.description && (
+                      <p className="text-xs text-muted-foreground">
+                        {role.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {errors.roles && <p className="text-xs text-destructive mt-1">{errors.roles.message}</p>}
+            </div>
           </div>
 
           <DialogFooter>
