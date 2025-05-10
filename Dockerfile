@@ -7,6 +7,13 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# Install Ollama
+# This will install ollama to /usr/local/bin/ollama by default
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Verify Ollama installation (optional but good for debugging)
+RUN ollama --version
+
 # Set the initial working directory
 WORKDIR /app
 
@@ -61,4 +68,4 @@ EXPOSE 3000
 EXPOSE 3001
 
 # Run command
-CMD ["bash", "run.sh"]
+CMD ["bash", "run-setup.sh"]
