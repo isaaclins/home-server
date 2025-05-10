@@ -350,7 +350,7 @@ app.post('/api/ollama/service/start', authenticateJWT, authorizeAdmin, async (re
   try {
     // Assuming 'ollama serve' is the command and it's in PATH
     // For production, consider using a more robust process manager or full paths.
-    const child = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' });
+    const child = spawn('ollama', ['serve'], { detached: true, stdio: 'inherit' });
     child.unref(); // Allow parent to exit independently
     ollamaProcess = child; // Store the child process reference
 

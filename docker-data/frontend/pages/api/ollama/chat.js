@@ -1,72 +1,54 @@
-import { NextResponse } from 'next/server';
+// import { NextResponse } from 'next/server'; // Not used in Pages Router
 
 // TODO: Replace with actual API call to local Ollama instance (e.g., http://localhost:11434/api/chat)
 // and implement proper streaming.
 
-export async function POST(request) {
-  try {
-    const { model, messages, stream } = await request.json(); // Assuming messages is an array of previous chat messages
+import fetch from 'node-fetch'; // Import node-fetch
 
-    if (!model || !messages) {
-      return NextResponse.json({ error: 'Model and messages are required' }, { status: 400 });
-    }
+export default async function handler(req, res) {
+  if (req.method === 'POST') {
+    try {
+      const { model, messages, stream } = req.body;
 
-    // Simulate a streaming response
-    if (stream) {
-      const readableStream = new ReadableStream({
-        async start(controller) {
-          const lastUserMessage = messages[messages.length - 1]?.content || "No message provided";
-          const botResponse = `Echo for model ${model}: ${lastUserMessage}`;
-          const chunks = botResponse.split(' '); // Split into words to simulate chunks
+      if (!model || !messages) {
+        res.status(400).json({ error: 'Model and messages are required' });
+        return;
+      }
 
-          for (const chunk of chunks) {
-            // Each chunk should be a JSON object with a "message" (or "response" for some Ollama versions) and a "done" field.
-            // For Ollama, the response format for a stream is typically a series of JSON objects like:
-            // { "model": "model_name", "created_at": "timestamp", "message": { "role": "assistant", "content": "response chunk" }, "done": false }
-            // When done: { "model": "model_name", "created_at": "timestamp", "done": true, ...other final stats... }
-            const payload = {
-              model: model,
-              created_at: new Date().toISOString(),
-              message: {
-                role: "assistant",
-                content: chunk + ' ',
-              },
-              done: false,
-            };
-            controller.enqueue(new TextEncoder().encode(JSON.stringify(payload) + '\n'));
-            await new Promise(resolve => setTimeout(resolve, 100)); // Simulate delay
-          }
-          // Send final done message
-          const finalPayload = {
-            model: model,
-            created_at: new Date().toISOString(),
-            done: true,
-            // Include other final stats if available from Ollama, e.g., total_duration, load_duration etc.
-          };
-          controller.enqueue(new TextEncoder().encode(JSON.stringify(finalPayload) + '\n'));
-          controller.close();
+      const ollamaResponse = await fetch('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          model: model,
+          messages: messages,
+          stream: stream !== undefined ? stream : false, // Ensure stream is explicitly false if not provided
+        }),
       });
-      return new Response(readableStream, {
-        headers: { 'Content-Type': 'application/x-ndjson', 'Transfer-Encoding': 'chunked' },
-      });
-    } else {
-      // Simulate a non-streaming (full) response
-      const lastUserMessage = messages[messages.length - 1]?.content || "No message provided";
-      const botResponse = `Full echo for model ${model}: ${lastUserMessage}`;
-      return NextResponse.json({
-        model: model,
-        created_at: new Date().toISOString(),
-        message: {
-          role: "assistant",
-          content: botResponse,
-        },
-        done: true,
-      });
-    }
 
-  } catch (error) {
-    console.error('Error in Ollama chat API:', error);
-    return NextResponse.json({ error: 'Failed to process chat message' }, { status: 500 });
+      if (!ollamaResponse.ok) {
+        const errorBody = await ollamaResponse.text();
+        console.error('Ollama API error:', ollamaResponse.status, errorBody);
+        res.status(ollamaResponse.status).json({ error: `Ollama API Error: ${errorBody}` });
+        return;
+      }
+
+      if (stream !== undefined ? stream : false) {
+        res.setHeader('Content-Type', 'application/x-ndjson');
+        res.setHeader('Transfer-Encoding', 'chunked');
+        ollamaResponse.body.pipe(res);
+      } else {
+        const responseData = await ollamaResponse.json();
+        res.status(200).json(responseData);
+      }
+
+    } catch (error) {
+      console.error('Error in Ollama chat API proxy:', error);
+      res.status(500).json({ error: 'Failed to process chat message' });
+    }
+  } else {
+    res.setHeader('Allow', ['POST']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 } 
