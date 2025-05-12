@@ -247,6 +247,9 @@ export default function DashboardPage() {
   }, [isAdmin, logout]);
 
   useEffect(() => {
+    // Add logging here
+    console.log('Dashboard useEffect - Auth Loading:', authLoading, 'User:', user, 'IsAdmin:', isAdmin);
+
     if (!authLoading && !user) {
         router.push('/login');
         return;
@@ -258,6 +261,8 @@ export default function DashboardPage() {
     }
 
     if (!authLoading && isAdmin) {
+      // Add log here too
+      console.log('Dashboard useEffect - Admin access confirmed, loading data...');
       loadUsers();
       fetchOllamaStatus();
 
@@ -420,6 +425,13 @@ export default function DashboardPage() {
     return 'text-yellow-600';
   };
 
+  // Log isAdmin value on every render
+  console.log("--- Dashboard Render ---");
+  console.log("Auth Loading:", authLoading);
+  console.log("User:", user);
+  console.log("IsAdmin:", isAdmin);
+  console.log("----------------------");
+
   return (
     <div className="min-h-screen bg-slate-100 p-4 md:p-8 space-y-6">
       {/* Top Row */}
@@ -451,7 +463,13 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <Button onClick={scrollToUserManagement} variant="outline" className="w-full justify-start"><Users className="mr-2 h-4 w-4"/> Manage Users</Button>
-            <Button variant="outline" className="w-full justify-start text-muted-foreground cursor-not-allowed"><Terminal className="mr-2 h-4 w-4" /> Web Terminal (Soon)</Button>
+            {isAdmin ? (
+                <Link href="/admin/terminal" passHref>
+                    <Button variant="outline" className="w-full justify-start"><Terminal className="mr-2 h-4 w-4" /> Web Terminal</Button>
+                </Link>
+            ) : (
+                 <Button variant="outline" className="w-full justify-start text-muted-foreground cursor-not-allowed" disabled><Terminal className="mr-2 h-4 w-4" /> Web Terminal (Admin Only)</Button>
+            )}
           </CardContent>
         </Card>
 

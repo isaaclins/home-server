@@ -10,6 +10,8 @@ const { promisify } = require("util"); // Added for Ollama
 const execAsync = promisify(exec); // Added for Ollama
 const http = require('http'); // Assuming you've added this for socket.io
 const { Server } = require("socket.io"); // Assuming you've added this for socket.io
+const pty = require('node-pty'); // Import node-pty
+const os = require('os'); // To get the default shell
 
 const app = express();
 const DEFAULT_PORT = 3002; // Changed default port
@@ -40,6 +42,92 @@ const io = new Server(server, {
     origin: "http://localhost:3000", 
     methods: ["GET", "POST"]
   }
+});
+
+// Determine the shell based on the OS
+const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+
+// --- Main Socket.IO connection handling (for logs) ---
+// Currently, the new_log emit is handled in logRequestAndEmit middleware
+io.on('connection', (socket) => {
+    console.log('a user connected to the main namespace');
+    socket.on('disconnect', () => {
+        console.log('user disconnected from the main namespace');
+    });
+});
+
+
+// --- Terminal Socket.IO Namespace --- 
+const terminalNamespace = io.of('/terminal');
+
+// Middleware for the terminal namespace to check JWT
+terminalNamespace.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        console.error("Terminal connection attempt without token.");
+        return next(new Error('Authentication error: Token missing'));
+    }
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+            console.error("Terminal connection JWT verification failed:", err.message);
+            return next(new Error('Authentication error: Invalid token'));
+        }
+        // Check if user is admin
+        if (!decoded || !decoded.isAdmin) {
+            console.warn("Terminal connection attempt by non-admin user:", decoded?.username);
+            return next(new Error('Authorization error: Admin privileges required'));
+        }
+        // Store user info on the socket for later use if needed
+        socket.user = decoded; 
+        next();
+    });
+});
+
+terminalNamespace.on('connection', (socket) => {
+    console.log(`Admin user ${socket.user.username} connected to terminal namespace`);
+
+    // Spawn a pseudo-terminal process
+    const ptyProcess = pty.spawn(shell, [], {
+        name: 'xterm-color',
+        // Determine initial cols/rows from handshake query or use defaults
+        cols: parseInt(socket.handshake.query.cols) || 80,
+        rows: parseInt(socket.handshake.query.rows) || 24,
+        cwd: process.env.HOME, // Start in the user's home directory (within the container)
+        env: process.env
+    });
+
+    console.log(`Terminal process created for ${socket.user.username} with PID: ${ptyProcess.pid}`);
+
+    // Pipe data from PTY to Socket.IO
+    ptyProcess.onData((data) => {
+        socket.emit('terminal.output', data);
+    });
+
+    // Pipe data from Socket.IO to PTY
+    socket.on('terminal.input', (data) => {
+        ptyProcess.write(data);
+    });
+
+    // Handle terminal resize events
+    socket.on('terminal.resize', ({ cols, rows }) => {
+        if (typeof cols === 'number' && typeof rows === 'number') {
+             console.log(`Resizing terminal for ${socket.user.username} to ${cols}x${rows}`);
+             ptyProcess.resize(cols, rows);
+        }
+    });
+
+    // Handle client disconnect
+    socket.on('disconnect', () => {
+        console.log(`Admin user ${socket.user.username} disconnected from terminal namespace. Killing PTY process ${ptyProcess.pid}.`);
+        ptyProcess.kill();
+    });
+
+    // Handle PTY process exit
+    ptyProcess.onExit(({ exitCode, signal }) => {
+         console.log(`PTY process ${ptyProcess.pid} exited with code ${exitCode}, signal ${signal}.`);
+         // Optionally notify the client or attempt cleanup
+         socket.disconnect(true); // Disconnect the socket if the process exits unexpectedly
+    });
 });
 
 app.use(cors()); // Enable CORS for all routes
