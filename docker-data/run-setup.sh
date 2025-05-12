@@ -150,10 +150,22 @@ echo "[Phase 1/2] Initializing database and admin user..."
 create_data_dir_and_db_tables
 
 if ! admin_user_exists_in_db; then
-    echo "No admin user found in database. Proceeding with interactive admin setup."
-    perform_interactive_admin_setup
+    # Check for environment variables for non-interactive setup
+    if [ -n "$INITIAL_ADMIN_USER" ] && [ -n "$INITIAL_ADMIN_EMAIL" ] && [ -n "$INITIAL_ADMIN_PASSWORD" ]; then
+        echo "Environment variables for initial admin found. Attempting non-interactive setup..."
+        if add_admin_user_to_db "$INITIAL_ADMIN_USER" "$INITIAL_ADMIN_PASSWORD" "$INITIAL_ADMIN_EMAIL"; then
+             echo "--- Initial Admin User Setup Complete (Non-Interactive) ---"
+        else
+             echo "--- Initial Admin User Setup Failed (Non-Interactive) ---"
+             # Decide if you want to exit or fall back to interactive
+             # exit 1 
+        fi
+    else
+        echo "No admin user found and no environment variables set. Proceeding with interactive admin setup."
+        perform_interactive_admin_setup
+    fi
 else
-    echo "Admin user already exists in the database. Skipping interactive setup."
+    echo "Admin user already exists in the database. Skipping admin setup."
 fi
 echo "[Phase 1/2] Database and admin user setup complete."
 echo # Blank line for readability

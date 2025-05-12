@@ -18,10 +18,10 @@ const loginSchema = z.object({
   password: z.string().min(1, { message: "Password is required" }),
 });
 
-const API_BASE_URL = 'http://localhost:3001/api'; // Ensure this matches your backend
+const API_BASE_URL = 'http://localhost:3002/api'; // Ensure this matches your backend
 
 export default function LoginPage() {
-  const { login } = useAuthContext();
+  const { login, logout } = useAuthContext();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -51,18 +51,25 @@ export default function LoginPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Login failed. Please check your credentials.');
+        const errorMessage = result.error || 'Login failed. Please check your credentials.';
+        toast.error(errorMessage);
+        logout();
+        return;
       }
 
       if (result.token) {
         login(result.token);
         router.push('/dashboard');
       } else {
-        throw new Error('Login failed. No token received.');
+        toast.error('Login failed. No token received.');
+        logout();
       }
     } catch (error) {
       console.error("Login error:", error);
       toast.error(error.message || 'An unexpected error occurred during login.');
+      logout();
+    } finally {
+      setIsLoading(false);
     }
   };
 

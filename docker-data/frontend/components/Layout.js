@@ -25,7 +25,7 @@ export default function Layout({ children }) {
               </Link>
             )}
             {user && isAdmin && (
-              <Link href="/admin/users" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+              <Link href="/dashboard" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
                 User Management
               </Link>
             )}
