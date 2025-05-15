@@ -1,34 +1,40 @@
-# Use an official Node.js runtime as a parent image
-FROM --platform=linux/amd64 node:22-slim
+# --- Builder Stage for Ollama ---
+FROM --platform=linux/amd64 node:22-slim as ollama-builder
 
-# Install necessary dependencies: git (for npm), sqlite3 (for setup.sh), coreutils (for sha256sum in setup.sh), curl (for ollama)
+# Install only dependencies needed for the ollama install script (curl, tar, gzip, coreutils for mktemp, ca-certificates for SSL/TLS verification)
 RUN apt-get update && \
-    apt-get install -y sqlite3 git coreutils curl && \
+    apt-get install -y --no-install-recommends curl tar gzip coreutils ca-certificates && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Ollama
-# This will install ollama to /usr/local/bin/ollama by default
-RUN curl -fsSL https://ollama.com/install.sh | sh
+# Copy and run your local install_ollama.sh script
+COPY docker-data/install_ollama.sh /tmp/install_ollama.sh
+RUN chmod +x /tmp/install_ollama.sh && \
+    /tmp/install_ollama.sh
 
-# Verify Ollama installation (optional but good for debugging)
+# --- Main Application Stage ---
+FROM --platform=linux/amd64 node:22-slim
+
+# Install system dependencies for your application
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends sqlite3 git coreutils curl python3 build-essential && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy Ollama from the builder stage
+COPY --from=ollama-builder /usr/local/bin/ollama /usr/local/bin/ollama
+COPY --from=ollama-builder /usr/local/lib/ollama /usr/local/lib/ollama/
+
+# Verify Ollama installation
 RUN ollama --version
 
-# Set the initial working directory
 WORKDIR /app
-
-# --- Main App (concurrently) Setup ---
-
-# Create the target directory for application data
 RUN mkdir -p /app/docker-data
 
-# Copy only package.json to leverage Docker cache for npm install
 COPY docker-data/package.json /app/docker-data/package.json
+COPY docker-data/package-lock.json /app/docker-data/package-lock.json
 
-# Set WORKDIR for npm install
 WORKDIR /app/docker-data
-# Run npm install. This will use the copied package.json and generate a new
-# package-lock.json inside the image, specific to linux/amd64.
 RUN npm install --arch=x64 --platform=linux
 
 # Verification Step 1: Check if tailwindcss is installed
@@ -40,16 +46,10 @@ RUN if [ -d "/app/docker-data/node_modules/tailwindcss" ]; then \
     exit 1; \
     fi
 
-# Reset WORKDIR for copying the rest of the application code
 WORKDIR /app
-
-# Copy the rest of the application code from host's docker-data
-# Your .dockerignore file (with **/node_modules) is CRITICAL here to prevent
-# the host's docker-data/node_modules from overwriting the one just installed.
 COPY docker-data/ ./docker-data/
 
 # Verification Step 2: Check if tailwindcss is still present after the main COPY
-# This ensures the COPY command (and .dockerignore) worked as expected for node_modules.
 RUN if [ -d "/app/docker-data/node_modules/tailwindcss" ]; then \
     echo "SUCCESS: tailwindcss directory still found after main COPY operation."; \
     else \
@@ -58,14 +58,9 @@ RUN if [ -d "/app/docker-data/node_modules/tailwindcss" ]; then \
     exit 1; \
     fi
 
-# Set the final working directory for the CMD
 WORKDIR /app/docker-data
 
-# Expose ports
-# Frontend
 EXPOSE 3000
-# Backend
 EXPOSE 3001
 
-# Run command
 CMD ["bash", "run-setup.sh"]

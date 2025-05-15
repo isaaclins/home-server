@@ -12,6 +12,7 @@ const TerminalComponent = dynamic(() => import('@/components/admin/TerminalCompo
 });
 
 export default function AdminTerminalPage() {
+  console.log("AdminTerminalPage component rendering..."); // Add this log
   const { user, isAdmin, loading: authLoading, logout } = useAuthContext();
   const router = useRouter();
 

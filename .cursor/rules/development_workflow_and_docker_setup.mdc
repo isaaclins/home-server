@@ -1,0 +1,63 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Development Workflow and Docker Setup Guide
+
+This guide outlines the development workflow, Docker container setup, and key considerations for the `home-server` project.
+
+## 1. Starting Development Environment
+
+Use the provided shell scripts to build and run the Docker container:
+
+*   **`[dev.sh](mdc:dev.sh)`**: Builds the Docker image (using cache for speed) and runs the container.
+*   **`[nocache-dev.sh](mdc:nocache-dev.sh)`**: Builds the Docker image *without* using any cache (ensures a completely fresh build) and runs the container.
+
+Both scripts:
+1.  Ensure the Docker daemon is running.
+2.  Optionally accept initial admin credentials as command-line arguments (`username`, `email`, `password`). If provided, these are passed as environment variables (`INITIAL_ADMIN_USER`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`) to the container for non-interactive setup. **Caution**: Passing sensitive data via environment variables can have security implications in some environments. Avoid hardcoding credentials directly in any script or versioned file.
+3.  Remove any existing container named `home-server` using `docker rm -f home-server`.
+4.  Build the Docker image named `home-server-image` using the `[Dockerfile](mdc:Dockerfile)`.
+5.  Run the `home-server-image` container, mapping ports (e.g., `3000:3000` for frontend, `3002:3002` for backend access on host).
+
+## 2. Docker Container Internals (`[Dockerfile](mdc:Dockerfile)`)
+
+The `Dockerfile` defines the container environment:
+
+1.  **Base Image**: Starts from `node:22-slim` (Linux/AMD64).
+2.  **System Dependencies**: Installs `sqlite3`, `git`, `coreutils`, `curl`, `python3`, and `build-essential` using `apt-get`. These are needed for `run-setup.sh`, `npm install` (especially for native addons via `node-gyp`), and Ollama.
+3.  **Ollama Installation**:
+    *   Copies `[docker-data/install_ollama.sh](mdc:docker-data/install_ollama.sh)` into the image.
+    *   Runs this script to download and install Ollama.
+    *   Verifies with `ollama --version`.
+4.  **Application Setup**:
+    *   Sets `WORKDIR /app`.
+    *   Copies `[docker-data/package.json](mdc:docker-data/package.json)` and `[docker-data/package-lock.json](mdc:docker-data/package-lock.json)`.
+    *   Changes `WORKDIR` to `/app/docker-data`.
+    *   Runs `npm install --arch=x64 --platform=linux` to install Node.js dependencies.
+    *   Copies the entire `docker-data/` directory (containing frontend, backend, scripts) into `/app/docker-data/` in the image.
+    *   **CRITICAL**: Ensure your project's root `.dockerignore` file includes `docker-data/node_modules` or `**/node_modules` to prevent local `node_modules` from overwriting the container-specific ones.
+5.  **Ports**: `EXPOSE 3000` (frontend) and `EXPOSE 3001` (backend). Note that `[dev.sh](mdc:dev.sh)` maps host port `3002` to container port `3002`. Ensure consistency between exposed backend port, `[docker-data/run-setup.sh](mdc:docker-data/run-setup.sh)` expectations, and `[dev.sh](mdc:dev.sh)` port mapping if issues arise.
+6.  **Entrypoint**: `CMD ["bash", "docker-data/run-setup.sh"]` executes `[docker-data/run-setup.sh](mdc:docker-data/run-setup.sh)`.
+
+## 3. Container Runtime (`[docker-data/run-setup.sh](mdc:docker-data/run-setup.sh)`)
+
+When the container starts, `run-setup.sh` performs these actions:
+
+1.  **Database Initialization**: Creates an SQLite database at `/app/docker-data/data/home_server.db` and sets up necessary tables (e.g., `users`).
+    *   **Data Persistence**: This database file resides within the container. If the container is removed (e.g., via `docker rm -f home-server` in `[dev.sh](mdc:dev.sh)`), the database will be **reset on the next run** unless a Docker volume is mounted to `/app/docker-data/data`. For development, this reset behavior might be acceptable or even desired. For persistent data, a volume mount would be necessary.
+2.  **Admin User Setup**:
+    *   Checks for an existing admin.
+    *   If none, uses environment variables (`INITIAL_ADMIN_USER`, etc.) for non-interactive setup.
+    *   If no environment variables, prompts for interactive setup.
+3.  **Start Ollama**: Runs `ollama serve &` in the background.
+4.  **Start Application**: Executes `npm run dev` to start the frontend and backend servers (likely via `concurrently`).
+5.  **Cleanup**: Attempts to `kill` the Ollama process when `npm run dev` exits.
+
+## 4. Development Best Practices
+
+*   **Avoid Hardcoding Credentials**: Do not write sensitive information like API keys or passwords directly into scripts, source code, or the `[Dockerfile](mdc:Dockerfile)`. Use environment variables (as done for initial admin setup) or a proper secrets management solution for production.
+*   **Database Interaction**: The development setup uses an SQLite database that is re-initialized if the container is rebuilt without a persistent volume. Be mindful of this data lifecycle. For production or persistent development data, implement Docker volume mounts for the `/app/docker-data/data` directory.
+*   **`.dockerignore`**: Maintain a comprehensive `.dockerignore` file (especially for `node_modules`, `.git`, build artifacts) at the project root to keep the build context small and prevent unintended files from being copied into the image.
+*   **Port Consistency**: Ensure the ports exposed in the `[Dockerfile](mdc:Dockerfile)`, listened to by applications in the container, and mapped in `[dev.sh](mdc:dev.sh)`/`[nocache-dev.sh](mdc:nocache-dev.sh)` are consistent.

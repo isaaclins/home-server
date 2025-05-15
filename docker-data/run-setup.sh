@@ -197,10 +197,62 @@ print_server_info() {
 
 print_server_info
 
-# Start the application (e.g., using concurrently via npm script)
-npm run dev
+# Start Ollama service in the background
+echo "Starting Ollama service in the background..."
+ollama serve &
+OLLAMA_PID=$!
+echo "Ollama service started with PID $OLLAMA_PID."
 
-EXIT_CODE=$?
-echo "Application process (npm run dev) exited with code $EXIT_CODE."
-echo "=== Application Setup and Run Script Finished ==="
-exit $EXIT_CODE 
+# Give Ollama a moment to start up (optional, adjust as needed)
+sleep 5 
+
+print_server_info
+
+# Start the application (e.g., using concurrently via npm script) in the background
+echo "Starting main application (npm run dev) in the background..."
+npm run dev &
+NPM_DEV_PID=$!
+echo "Main application 'npm run dev' started with PID $NPM_DEV_PID."
+echo # Blank line
+
+echo "---------------------------------------------------------------------"
+echo "Development environment is running."
+echo " - Frontend Next.js app expected at: http://localhost:3000"
+echo " - Backend Express API expected at:  http://localhost:3001 (Note: dev.sh maps host port 3002 to container port 3002 by default. If backend listens on 3001, dev.sh should map e.g. -p 3002:3001)"
+echo " - Ollama API (internally): http://localhost:11434"
+echo
+echo "Services running in the background (inside container):"
+echo " - Ollama (PID $OLLAMA_PID)"
+echo " - Main application 'npm run dev' (PID $NPM_DEV_PID)"
+echo
+echo "You are now in an interactive bash shell inside the container: $(pwd)"
+echo "You can inspect files, run commands, etc."
+echo "To stop the development environment and exit the container, type 'exit' in this shell."
+echo "---------------------------------------------------------------------"
+bash
+
+# --- Cleanup after interactive shell exits ---
+echo # Blank line
+echo "Interactive shell exited. Cleaning up background processes..."
+
+# Send SIGTERM first, then wait, then SIGKILL if necessary (more graceful)
+echo "Attempting to gracefully stop main application (npm run dev - PID $NPM_DEV_PID)..."
+kill $NPM_DEV_PID 2>/dev/null
+if wait $NPM_DEV_PID 2>/dev/null; then
+    echo "Main application stopped gracefully."
+else
+    echo "Main application did not stop gracefully or was already stopped. Sending SIGKILL if process still exists..."
+    kill -9 $NPM_DEV_PID 2>/dev/null || echo "Main application (PID $NPM_DEV_PID) already stopped or not found."
+fi
+
+echo "Attempting to gracefully stop Ollama service (PID $OLLAMA_PID)..."
+kill $OLLAMA_PID 2>/dev/null
+if wait $OLLAMA_PID 2>/dev/null; then
+    echo "Ollama service stopped gracefully."
+else
+    echo "Ollama service did not stop gracefully or was already stopped. Sending SIGKILL if process still exists..."
+    kill -9 $OLLAMA_PID 2>/dev/null || echo "Ollama service (PID $OLLAMA_PID) already stopped or not found."
+fi
+
+echo "=== Application Setup and Run Script Finished ===="
+exit 0 
