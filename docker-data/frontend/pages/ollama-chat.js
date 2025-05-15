@@ -51,6 +51,7 @@ export default function OllamaChatPage() {
   const [clearChatOnModelChange, setClearChatOnModelChange] = useState(false);
   const [modelToPull, setModelToPull] = useState('');
   const [isPullingModel, setIsPullingModel] = useState(false);
+  const [pullProgress, setPullProgress] = useState({ message: '', percentage: null });
 
   const managedModels = useMemo(() => {
     let availableModels = [];
@@ -243,6 +244,7 @@ export default function OllamaChatPage() {
       return;
     }
     setIsPullingModel(true);
+    setPullProgress({ message: `Initializing pull for ${finalModelName}...`, percentage: 0 });
     toast.info(`Starting to pull model: ${finalModelName}... This may take a while.`);
 
     try {
@@ -267,6 +269,11 @@ export default function OllamaChatPage() {
               if (parsed.status && parsed.status !== lastStatus) {
                 console.log(`Pull progress for ${finalModelName}: ${parsed.status}`);
                 lastStatus = parsed.status;
+                let percentage = null;
+                if (parsed.total && parsed.completed) {
+                  percentage = Math.round((parsed.completed / parsed.total) * 100);
+                }
+                setPullProgress({ message: `${finalModelName}: ${parsed.status}`, percentage });
               }
               if (parsed.error) {
                 throw new Error(parsed.error);
@@ -287,6 +294,7 @@ export default function OllamaChatPage() {
       
       toast.success(`Model ${finalModelName} pulled successfully! Refreshing local models...`);
       setModelToPull('');
+      setPullProgress({ message: `Successfully pulled ${finalModelName}!`, percentage: 100 });
       const localModelsResponse = await fetch('/api/ollama/models');
       const localModelsData = await localModelsResponse.json();
       setLocalOllamaModels(localModelsData);
@@ -294,8 +302,10 @@ export default function OllamaChatPage() {
     } catch (error) {
       console.error("Failed to pull model:", error);
       toast.error(`Error pulling model ${finalModelName}: ${error.message}`);
+      setPullProgress({ message: `Error pulling ${finalModelName}: ${error.message}`, percentage: null });
     } finally {
       setIsPullingModel(false);
+      setTimeout(() => setPullProgress({ message: '', percentage: null }), 5000);
     }
   };
 
@@ -326,7 +336,7 @@ export default function OllamaChatPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="model-select">Active Model</Label>
                 <Select value={selectedModel} onValueChange={setSelectedModel}>
-                  <SelectTrigger id="model-select">
+                  <SelectTrigger id="model-select" className="w-full min-w-0">
                     <SelectValue placeholder="Select a model" />
                   </SelectTrigger>
                   <SelectContent>
@@ -358,11 +368,10 @@ export default function OllamaChatPage() {
                         Pull new models from Ollama library or delete existing local models.
                       </DialogDescription>
                     </DialogHeader>
-                    {/* Content for model management */}
-                    <div className="grid gap-4 py-4">
+                    <div className="space-y-4 py-4">
                         {externalModelsForPulling && externalModelsForPulling.length > 0 && (
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="select-external-model" className="text-right whitespace-nowrap">
+                          <div className="grid grid-cols-[1fr_3fr] items-center gap-3">
+                            <Label htmlFor="select-external-model" className="text-right">
                               Select Model
                             </Label>
                             <Select
@@ -371,14 +380,14 @@ export default function OllamaChatPage() {
                                 if (selected) {
                                   let pullName = selected.name;
                                   if (selected.tags && selected.tags.length > 0) {
-                                    pullName += ':' + selected.tags[0]; // Default to the first tag
+                                    pullName += ':' + selected.tags[0];
                                   }
                                   setModelToPull(pullName);
                                   toast.info(`Selected: ${pullName}. Adjust tag if needed, then click Pull.`)
                                 }
                               }}
                             >
-                              <SelectTrigger id="select-external-model" className="col-span-3">
+                              <SelectTrigger id="select-external-model" className="w-full">
                                 <SelectValue placeholder="Select a model from registry..." />
                               </SelectTrigger>
                               <SelectContent className="max-h-56">
@@ -391,8 +400,9 @@ export default function OllamaChatPage() {
                             </Select>
                           </div>
                         )}
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="model-to-pull" className="text-right whitespace-nowrap">
+                        
+                        <div className="grid grid-cols-[1fr_2fr_auto] items-center gap-3">
+                            <Label htmlFor="model-to-pull" className="text-right">
                                 Pull Model Name
                             </Label>
                             <Input 
@@ -400,18 +410,31 @@ export default function OllamaChatPage() {
                                 value={modelToPull} 
                                 onChange={(e) => setModelToPull(e.target.value)}
                                 placeholder="e.g., llama3:latest" 
-                                className="col-span-2"
+                                className="min-w-0"
+                                disabled={isPullingModel}
                             />
-                            <Button onClick={() => handlePullModel(modelToPull)} disabled={isPullingModel || !modelToPull.trim()}>
+                            <Button onClick={() => handlePullModel(modelToPull)} disabled={isPullingModel || !modelToPull.trim()} className="whitespace-nowrap">
                                 {isPullingModel ? 'Pulling...' : 'Pull'}
                             </Button>
                         </div>
-                        <div className="text-xs text-muted-foreground col-span-4">
+
+                        {pullProgress.message && (
+                          <div className="text-sm text-muted-foreground">
+                            <p>{pullProgress.message}</p>
+                            {pullProgress.percentage !== null && (
+                              <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-1">
+                                <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${pullProgress.percentage}%` }}></div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        <div className="text-xs text-muted-foreground">
                             Browse available models and tags on <a href="https://ollama.com/library" target="_blank" rel="noopener noreferrer" className="underline">ollama.com/library</a>.
                         </div>
                        
-                        <div> {/* Grouping local models title and list/scrollarea */}
-                          <h4 className="font-semibold pt-2 mb-2">Available Local Models:</h4>
+                        <div>
+                          <h4 className="font-semibold mb-2">Available Local Models:</h4>
                           {localOllamaModels.length > 0 ? (
                               <ScrollArea className="h-40 border rounded-md p-2">
                                   {localOllamaModels.map(model => (
