@@ -32,39 +32,36 @@ jobs:
             home-server-image
           # Wait for services to start up
           echo "Waiting for services to start..."
-          sleep 30 # Adjust as needed for your app's startup time
+          sleep 45 # Increased sleep time just in case
 
-      - name: Check Frontend Homepage
-        run: curl --fail --silent --show-error http://localhost:3000/ | cat
+      - name: Check Frontend Homepage (via container)
+        run: docker exec home-server-ci curl --fail --silent --show-error http://localhost:3000/ | cat
 
-      - name: Check Frontend Login Page
-        run: curl --fail --silent --show-error http://localhost:3000/login | cat
+      - name: Check Frontend Login Page (via container)
+        run: docker exec home-server-ci curl --fail --silent --show-error http://localhost:3000/login | cat
 
-      - name: Check Backend Health and Authenticated Route
+      - name: Check Backend Health and Authenticated Route (via container)
         run: |
-          echo "Attempting login to backend..."
-          LOGIN_RESPONSE=$(curl --silent --show-error -X POST -H "Content-Type: application/json" \
-            -d '{"username":"testadmin","password":"password"}' \
-            http://localhost:3002/api/auth/login)
+          docker exec home-server-ci bash -c \
+          'echo "Attempting login to backend..." && \
+           LOGIN_RESPONSE=$(curl --silent --show-error -X POST -H "Content-Type: application/json" \
+             -d "{\"username\":\"testadmin\",\"password\":\"password\"}" \
+             http://localhost:3002/api/auth/login) && \
+           echo "Login response: $LOGIN_RESPONSE" && \
+           TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*' | grep -o '[^"]*$') && \
+           if [ -z "$TOKEN" ]; then \
+             echo "Login failed or token not found in response." && \
+             exit 1; \
+           else \
+             echo "Token acquired." && \
+             echo "Checking /api/users (authenticated route)..." && \
+             curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" http://localhost:3002/api/users | cat && \
+             echo "Checking /api/logs (authenticated admin route)..." && \
+             curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" http://localhost:3002/api/logs | cat; \
+           fi'
 
-          echo "Login response: $LOGIN_RESPONSE"
-
-          TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*' | grep -o '[^"]*$')
-
-          if [ -z "$TOKEN" ]; then
-            echo "Login failed or token not found in response."
-            docker logs home-server-ci
-            exit 1
-          else
-            echo "Token acquired: $TOKEN"
-            echo "Checking /api/users (authenticated route)..."
-            curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" http://localhost:3002/api/users | cat
-            echo "Checking /api/logs (authenticated admin route)..."
-            curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" http://localhost:3002/api/logs | cat
-          fi
-
-      - name: Check Ollama Chat Page
-        run: curl --fail --silent --show-error http://localhost:3000/ollama-chat | cat
+      - name: Check Ollama Chat Page (via container)
+        run: docker exec home-server-ci curl --fail --silent --show-error http://localhost:3000/ollama-chat | cat
 
       - name: Display Docker logs on failure
         if: failure()
