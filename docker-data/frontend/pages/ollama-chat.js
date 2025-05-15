@@ -52,19 +52,6 @@ export default function OllamaChatPage() {
   const [modelToPull, setModelToPull] = useState('');
   const [isPullingModel, setIsPullingModel] = useState(false);
 
-  const previousSelectedModelRef = useRef();
-  useEffect(() => {
-    if (previousSelectedModelRef.current && previousSelectedModelRef.current !== selectedModel) {
-      const currentModelDetails = managedModels.find(m => m.id === selectedModel);
-      toast.info(`Switched to model: ${currentModelDetails?.name || selectedModel}`);
-      if (clearChatOnModelChange) {
-        setChatHistory([]);
-        toast.info("Chat history cleared.");
-      }
-    }
-    previousSelectedModelRef.current = selectedModel;
-  }, [selectedModel, clearChatOnModelChange, managedModels]);
-
   const managedModels = useMemo(() => {
     let availableModels = [];
     if (isAdmin || (user && user.roles && user.roles.includes('_ollama_user'))) {
@@ -82,6 +69,19 @@ export default function OllamaChatPage() {
     }
     return availableModels;
   }, [localOllamaModels, isAdmin, user, selectedModel]);
+
+  const previousSelectedModelRef = useRef();
+  useEffect(() => {
+    if (previousSelectedModelRef.current && previousSelectedModelRef.current !== selectedModel) {
+      const currentModelDetails = managedModels.find(m => m.id === selectedModel);
+      toast.info(`Switched to model: ${currentModelDetails?.name || selectedModel}`);
+      if (clearChatOnModelChange) {
+        setChatHistory([]);
+        toast.info("Chat history cleared.");
+      }
+    }
+    previousSelectedModelRef.current = selectedModel;
+  }, [selectedModel, clearChatOnModelChange, managedModels]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -291,175 +291,160 @@ export default function OllamaChatPage() {
     }
   };
 
-  if (loading) return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  if (loading || !user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle>Ollama Chat</CardTitle>
+            <CardDescription>Loading...</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle>Ollama Chat</CardTitle>
-          <CardDescription>Chat with available Ollama models.</CardDescription>
-          {isAdmin && externalModelsForPulling.length > 0 && (
-            <Dialog open={isAddModelDialogOpen} onOpenChange={(isOpen) => {
-              setIsAddModelDialogOpen(isOpen);
-              if (!isOpen) setDialogModelTagSelections({});
-            }}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="mt-2">Pull Models from Registry</Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] md:max-w-[700px] lg:max-w-[900px]">
-                <DialogHeader>
-                  <DialogTitle>Pull Models from Registry</DialogTitle>
-                  <DialogDescription>
-                    Select a model and a specific tag (if available) to pull to your local Ollama instance.
-                    Pulling a model will download it to your server.
-                  </DialogDescription>
-                </DialogHeader>
-                <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
-                  <div className="space-y-3">
-                    {externalModelsForPulling.map((model) => {
-                      const modelIdentifier = model.name;
-                      const currentSelectedTag = dialogModelTagSelections[modelIdentifier] || (model.tags.length > 0 ? model.tags[0] : null);
-
-                      return (
-                        <div key={model.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border rounded-md">
-                          <div className="flex-grow">
-                            <p className="text-sm font-semibold text-foreground">{model.name}</p>
-                            {model.description && <p className="text-xs text-muted-foreground mt-1 pr-2">{model.description}</p>}
-                          </div>
-                          
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {model.tags && model.tags.length > 0 && (
-                              <Select 
-                                value={currentSelectedTag}
-                                onValueChange={(tag) => {
-                                  setDialogModelTagSelections(prev => ({ ...prev, [modelIdentifier]: tag }));
-                                }}
-                              >
-                                <SelectTrigger className="w-[150px] h-9 text-xs">
-                                  <SelectValue placeholder="Select tag" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {model.tags.map(tag => (
-                                    <SelectItem key={tag} value={tag} className="text-xs">
-                                      {tag} (Pull as {model.name}:{tag})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                            <Button 
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                const modelToPullWithTag = currentSelectedTag 
-                                  ? `${model.name}:${currentSelectedTag}` 
-                                  : model.name;
-                                handlePullModel(modelToPullWithTag);
-                                setIsAddModelDialogOpen(false);
-                              }}
-                              disabled={isPullingModel}
-                            >
-                              Pull
+    <div className="flex flex-col h-[calc(100vh-theme(spacing.16)-theme(spacing.1)-1px)]">
+      <div className="flex-grow overflow-hidden">
+        <div className="h-full flex flex-col lg:flex-row gap-4 p-4">
+          {/* Left Panel: Model Selection and Management */}
+          <Card className="w-full lg:w-1/4 lg:max-w-xs flex flex-col">
+            <CardHeader>
+              <CardTitle>Ollama Chat</CardTitle>
+              <CardDescription>Select a model and start chatting.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-grow flex flex-col gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="model-select">Active Model</Label>
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger id="model-select">
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {managedModels.length > 0 ? (
+                      managedModels.map(model => (
+                        <SelectItem key={model.id} value={model.id}>{model.name} ({model.details?.family || 'N/A'})</SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>No models available</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox id="clear-chat-toggle" checked={clearChatOnModelChange} onCheckedChange={setClearChatOnModelChange} />
+                <label htmlFor="clear-chat-toggle" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Clear chat on model change
+                </label>
+              </div>
+              {isAdmin && (
+                <Dialog open={isAddModelDialogOpen} onOpenChange={setIsAddModelDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">Manage Models</Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                      <DialogTitle>Manage Ollama Models</DialogTitle>
+                      <DialogDescription>
+                        Pull new models from Ollama library or delete existing local models.
+                      </DialogDescription>
+                    </DialogHeader>
+                    {/* Content for model management */}
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="model-to-pull" className="text-right whitespace-nowrap">
+                                Pull Model
+                            </Label>
+                            <Input 
+                                id="model-to-pull"
+                                value={modelToPull} 
+                                onChange={(e) => setModelToPull(e.target.value)}
+                                placeholder="e.g., llama3:latest" 
+                                className="col-span-2"
+                            />
+                            <Button onClick={() => handlePullModel(modelToPull)} disabled={isPullingModel || !modelToPull.trim()}>
+                                {isPullingModel ? 'Pulling...' : 'Pull'}
                             </Button>
-                          </div>
                         </div>
-                      );
-                    })}
+                        <div className="text-xs text-muted-foreground col-span-4">
+                            Browse available models and tags on <a href="https://ollama.com/library" target="_blank" rel="noopener noreferrer" className="underline">ollama.com/library</a>.
+                        </div>
+                       
+                        <h4 className="font-semibold pt-2">Available Local Models:</h4>
+                        {localOllamaModels.length > 0 ? (
+                            <ScrollArea className="h-40 border rounded-md p-2">
+                                {localOllamaModels.map(model => (
+                                    <div key={model.id} className="flex justify-between items-center p-1.5 hover:bg-muted rounded-sm">
+                                        <span className="text-sm">{model.name}</span>
+                                        <Button 
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => handleDeleteModel(model.id)}
+                                        >
+                                            Delete
+                                        </Button>
+                                    </div>
+                                ))}
+                            </ScrollArea>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">No local models found.</p>
+                        )}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsAddModelDialogOpen(false)}>Close</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </CardContent>
+            <CardFooter className="mt-auto">
+              <p className="text-xs text-muted-foreground">
+                Ensure Ollama service is running.
+              </p>
+            </CardFooter>
+          </Card>
+
+          {/* Right Panel: Chat Interface */}
+          <Card className="w-full lg:w-3/4 flex flex-col h-full">
+            <CardHeader>
+              <CardTitle>Chat with {selectedModel ? managedModels.find(m=>m.id === selectedModel)?.name : 'N/A'}</CardTitle>
+              <CardDescription>Type your message below and press Enter or click Send.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-grow overflow-hidden flex flex-col">
+              <ScrollArea className="flex-grow border rounded-lg p-4 bg-muted">
+                {chatHistory.length === 0 && <p className="text-muted-foreground text-center">No messages yet.</p>}
+                {chatHistory.map((chat, index) => (
+                  <div key={index} className={`flex ${chat.sender === 'user' ? 'justify-end' : 'justify-start'} mb-2`}>
+                    <span className={`inline-block p-2 rounded-lg max-w-[70%] ${chat.sender === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                      {chat.text}
+                    </span>
                   </div>
-                </ScrollArea>
-                <DialogFooter>
-                  <Button variant="ghost" onClick={() => setIsAddModelDialogOpen(false)}>Close</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
-          <div className="flex items-center space-x-2 mt-2">
-            <Checkbox
-              id="clear-chat-toggle"
-              checked={clearChatOnModelChange}
-              onCheckedChange={setClearChatOnModelChange}
-            />
-            <Label htmlFor="clear-chat-toggle" className="text-sm font-medium">
-              Clear chat history on model change
-            </Label>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="model-select" className="text-sm font-medium">Select Model:</label>
-            <Select value={selectedModel} onValueChange={setSelectedModel}>
-              <SelectTrigger id="model-select" className="w-full">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                {managedModels.length > 0 ? (
-                  managedModels.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.name}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="no-models" disabled>No models available</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="border rounded-lg p-4 h-96 overflow-y-auto bg-white">
-            {chatHistory.map((chat, index) => (
-              <div key={index} className={`mb-2 text-sm ${chat.sender === 'user' ? 'text-right' : 'text-left'}`}>
-                <span className={`inline-block p-2 rounded-lg ${chat.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800'}`}>
-                  {chat.text}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
-            <Textarea
-              placeholder="Type your message..."
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              className="flex-grow"
-            />
-            <Button onClick={handleSendMessage}>Send</Button>
-          </div>
-        </CardContent>
-        {isAdmin && (
-          <CardFooter className="flex flex-col space-y-4 pt-4 border-t items-start">
-            <h3 className="text-lg font-semibold">Admin Controls</h3>
-            
-            <div className="space-y-2 w-full">
-              <Label htmlFor="pull-model-input" className="text-sm font-medium">Pull New Model to Local Ollama</Label>
-              <div className="flex gap-2">
-                <Input 
-                  id="pull-model-input"
-                  type="text"
-                  value={modelToPull}
-                  onChange={(e) => setModelToPull(e.target.value)}
-                  placeholder="e.g., llama2:latest or mistral"
-                  className="flex-grow"
-                  disabled={isPullingModel}
+                ))}
+              </ScrollArea>
+            </CardContent>
+            <CardFooter className="mt-auto">
+              <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex w-full items-start space-x-2">
+                <Textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder={`Chat with ${selectedModel || 'selected model'}... (Shift+Enter for new line)`}
+                  className="flex-1 resize-none min-h-[52px]"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
                 />
-                <Button onClick={() => handlePullModel(modelToPull)} disabled={isPullingModel || !modelToPull.trim()}>
-                  {isPullingModel ? "Pulling..." : "Pull Model"}
+                <Button type="submit" disabled={!message.trim() || !selectedModel} className="h-[52px]">
+                  Send
                 </Button>
-              </div>
-            </div>
-
-            <Button variant="destructive" size="sm" disabled={isPullingModel}>
-              Delete Selected Model (Local Ollama)
-            </Button>
-          </CardFooter>
-        )}
-      </Card>
+              </form>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

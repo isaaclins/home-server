@@ -433,7 +433,7 @@ export default function DashboardPage() {
   console.log("----------------------");
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8 space-y-6">
+    <div className="min-h-screen bg-background p-4 md:p-8 space-y-6">
       {/* Top Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Quick Links */}
@@ -491,11 +491,11 @@ export default function DashboardPage() {
               </div>
             </div>
              <div className="flex items-center justify-between opacity-50">
-              <div><p className="font-medium">File Service</p><p className="text-xs text-gray-500">UNKNOWN</p></div>
+              <div><p className="font-medium">File Service</p><p className="text-xs text-muted-foreground">UNKNOWN</p></div>
               <div className="flex space-x-1"><Button size="icon" variant="ghost" disabled><Play className="h-5 w-5" /></Button><Button size="icon" variant="ghost" disabled><StopCircle className="h-5 w-5" /></Button></div>
             </div>
             <div className="flex items-center justify-between opacity-50">
-              <div><p className="font-medium">PaaS Service</p><p className="text-xs text-gray-500">UNKNOWN</p></div>
+              <div><p className="font-medium">PaaS Service</p><p className="text-xs text-muted-foreground">UNKNOWN</p></div>
               <div className="flex space-x-1"><Button size="icon" variant="ghost" disabled><Play className="h-5 w-5" /></Button><Button size="icon" variant="ghost" disabled><StopCircle className="h-5 w-5" /></Button></div>
             </div>
           </CardContent>
@@ -512,7 +512,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="flex-grow overflow-y-auto text-xs space-y-1 font-mono">
             {recentLogs.length === 0 && (
-              <p className="text-gray-500 italic">No activity yet. Waiting for real-time updates...</p>
+              <p className="text-muted-foreground italic">No activity yet. Waiting for real-time updates...</p>
             )}
             {recentLogs.map((log, index) => (
               <div key={index}>{log}</div>
@@ -528,9 +528,9 @@ export default function DashboardPage() {
             <p className={`text-xs ${getStatusTextColor(ollamaStatus)}`}>{ollamaStatus.replace('_',' ')}</p>
           </Card>
           <Card className="flex flex-col items-center justify-center p-4 border-2 border-gray-300 opacity-60">
-            <Power className="h-8 w-8 mb-2 text-gray-400" />
+            <Power className="h-8 w-8 mb-2 text-muted-foreground" />
             <p className="font-semibold text-sm">File Service</p>
-            <p className="text-xs text-gray-400">UNKNOWN</p>
+            <p className="text-xs text-muted-foreground">UNKNOWN</p>
           </Card>
           <Card className="flex flex-col items-center justify-center p-4 border-2 border-red-500 opacity-60">
             <Power className="h-8 w-8 mb-2 text-red-500" />

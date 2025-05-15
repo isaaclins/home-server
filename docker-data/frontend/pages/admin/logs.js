@@ -119,7 +119,7 @@ export default function LogsPage() {
 
   if (authLoading || (!isAdmin && !authLoading && user)) { // Show loading if auth is loading OR if user is loaded but not admin (before redirect kicks in)
     return (
-        <div className="min-h-screen bg-slate-100 p-4 md:p-8">
+        <div className="min-h-screen bg-background p-4 md:p-8">
              <Skeleton className="h-8 w-32 mb-6" /> 
              <Card>
                 <CardHeader>
@@ -135,7 +135,7 @@ export default function LogsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-background p-4 md:p-8">
       <Link href="/dashboard" passHref>
         <Button variant="outline" size="sm" className="mb-6">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -152,9 +152,9 @@ export default function LogsPage() {
             <ScrollArea className="h-[60vh] md:h-[70vh] border rounded-md p-4">
                 <div className="text-xs space-y-1 font-mono">
                 {isLoadingLogs ? (
-                    <p className="text-gray-500 italic">Loading logs...</p>
+                    <p className="text-muted-foreground italic">Loading logs...</p>
                 ) : logs.length === 0 ? (
-                    <p className="text-gray-500 italic">No logs found.</p>
+                    <p className="text-muted-foreground italic">No logs found.</p>
                 ) : (
                     logs.map((logEntry, index) => (
                         <div key={logEntry.id || index}> {/* Use a unique ID from backend if available */} 
