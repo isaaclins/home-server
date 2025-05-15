@@ -111,22 +111,30 @@ export default function OllamaChatPage() {
 
         if (localData.length === 0 && isAdmin) {
           try {
-            const externalResponse = await fetch('/api/ollama/available-external-models.js');
-            if (!externalResponse.ok) {
-              toast.error("Could not fetch external model list. Please enter model names manually to pull (e.g., 'gemma:latest').");
+            const externalResponse = await fetch('https://isaaclins.com/ollama-model-api/models.json');
+            
+            if (externalResponse.status === 200) {
+              const externalData = await externalResponse.json();
+              setExternalModelsForPulling(externalData.map(model => ({
+                name: model.name,
+                description: model.description,
+                tags: model.tags || [],
+                extras: model.extras || [],
+                id: model.name // Assuming 'id' should be the model name for consistency
+              })));
+            } else if (externalResponse.status === 304) {
+              // Not modified, client should use cache. The externalModelsForPulling list remains as it is.
+              toast.info('External model list is up to date (loaded from cache).');
+              console.log('External model list not modified (304). Current list (if any) retained and will be displayed.');
+            } else {
+              // Any other non-200, non-304 status is an error here
+              toast.error("Could not fetch external model list from registry. Please enter model names manually to pull.");
               setExternalModelsForPulling([]);
-              throw new Error(`HTTP error fetching external models: ${externalResponse.status}`);
             }
-            const externalData = await externalResponse.json();
-            setExternalModelsForPulling(externalData.map(model => ({
-              name: model.name,
-              description: model.description,
-              tags: model.tags || [],
-              extras: model.extras || [],
-              id: model.name 
-            })));
           } catch (error) {
             console.error("Failed to fetch or process external models for pulling:", error);
+            // This catch handles network errors for the fetch itself, or JSON parsing errors for a 200 response
+            toast.error("Error fetching or processing external model list. Please try manual pull.");
             setExternalModelsForPulling([]);
           }
         } else if (!isAdmin) {
@@ -352,9 +360,40 @@ export default function OllamaChatPage() {
                     </DialogHeader>
                     {/* Content for model management */}
                     <div className="grid gap-4 py-4">
+                        {externalModelsForPulling && externalModelsForPulling.length > 0 && (
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="select-external-model" className="text-right whitespace-nowrap">
+                              Select Model
+                            </Label>
+                            <Select
+                              onValueChange={(value) => {
+                                const selected = externalModelsForPulling.find(m => m.id === value);
+                                if (selected) {
+                                  let pullName = selected.name;
+                                  if (selected.tags && selected.tags.length > 0) {
+                                    pullName += ':' + selected.tags[0]; // Default to the first tag
+                                  }
+                                  setModelToPull(pullName);
+                                  toast.info(`Selected: ${pullName}. Adjust tag if needed, then click Pull.`)
+                                }
+                              }}
+                            >
+                              <SelectTrigger id="select-external-model" className="col-span-3">
+                                <SelectValue placeholder="Select a model from registry..." />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-56">
+                                {externalModelsForPulling.map(model => (
+                                  <SelectItem key={model.id} value={model.id}>
+                                    {model.name} ({model.tags && model.tags.length > 0 ? model.tags.join(', ') : 'latest'})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="model-to-pull" className="text-right whitespace-nowrap">
-                                Pull Model
+                                Pull Model Name
                             </Label>
                             <Input 
                                 id="model-to-pull"
@@ -371,25 +410,27 @@ export default function OllamaChatPage() {
                             Browse available models and tags on <a href="https://ollama.com/library" target="_blank" rel="noopener noreferrer" className="underline">ollama.com/library</a>.
                         </div>
                        
-                        <h4 className="font-semibold pt-2">Available Local Models:</h4>
-                        {localOllamaModels.length > 0 ? (
-                            <ScrollArea className="h-40 border rounded-md p-2">
-                                {localOllamaModels.map(model => (
-                                    <div key={model.id} className="flex justify-between items-center p-1.5 hover:bg-muted rounded-sm">
-                                        <span className="text-sm">{model.name}</span>
-                                        <Button 
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => handleDeleteModel(model.id)}
-                                        >
-                                            Delete
-                                        </Button>
-                                    </div>
-                                ))}
-                            </ScrollArea>
-                        ) : (
-                            <p className="text-sm text-muted-foreground">No local models found.</p>
-                        )}
+                        <div> {/* Grouping local models title and list/scrollarea */}
+                          <h4 className="font-semibold pt-2 mb-2">Available Local Models:</h4>
+                          {localOllamaModels.length > 0 ? (
+                              <ScrollArea className="h-40 border rounded-md p-2">
+                                  {localOllamaModels.map(model => (
+                                      <div key={model.id} className="flex justify-between items-center p-1.5 hover:bg-muted rounded-sm">
+                                          <span className="text-sm">{model.name}</span>
+                                          <Button 
+                                              variant="destructive"
+                                              size="sm"
+                                              onClick={() => handleDeleteModel(model.id)}
+                                          >
+                                              Delete
+                                          </Button>
+                                      </div>
+                                  ))}
+                              </ScrollArea>
+                          ) : (
+                              <p className="text-sm text-muted-foreground">No local models found.</p>
+                          )}
+                        </div>
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setIsAddModelDialogOpen(false)}>Close</Button>
