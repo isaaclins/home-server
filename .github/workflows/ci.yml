@@ -21,7 +21,7 @@ jobs:
       - name: Build Docker image
         run: docker build -t home-server-image .
 
-      - name: Run Docker container in background
+      - name: Run Docker container and wait for services
         run: |
           docker run -d --name home-server-ci \
             -p 3000:3000 \
@@ -30,6 +30,33 @@ jobs:
             -e INITIAL_ADMIN_EMAIL=test@example.com \
             -e INITIAL_ADMIN_PASSWORD=password \
             home-server-image
+
+          echo "Waiting for container to stabilize..."
+          MAX_CONTAINER_CHECKS=12 # Check for up to 60 seconds
+          CONTAINER_CHECK_INTERVAL=5
+          CONTAINER_RUNNING=false
+          for i in $(seq 1 $MAX_CONTAINER_CHECKS); do
+            if docker ps --filter name=home-server-ci --filter status=running --quiet | grep -q .; then
+              echo "Container home-server-ci is running (Attempt $i/$MAX_CONTAINER_CHECKS)."
+              CONTAINER_RUNNING=true
+              # Give some time for services inside to potentially start before proceeding to next stage of checks
+              # The main service checks below have their own sleeps and retries
+              sleep $CONTAINER_CHECK_INTERVAL 
+              break 
+            else
+              echo "Container home-server-ci is not running or exited. Checking again in $CONTAINER_CHECK_INTERVAL seconds... (Attempt $i/$MAX_CONTAINER_CHECKS)"
+            fi
+            sleep $CONTAINER_CHECK_INTERVAL
+          done
+
+          if [ "$CONTAINER_RUNNING" = "false" ]; then
+            echo "Container home-server-ci failed to start or stay running."
+            echo "Displaying final logs from container home-server-ci:"
+            docker logs home-server-ci || echo "Could not retrieve logs for home-server-ci (it might have been removed or never started properly)."
+            exit 1
+          fi
+
+          echo "Container home-server-ci is running. Proceeding with service health checks."
           # Wait for services to start up
           echo "Waiting for services to start..."
 
