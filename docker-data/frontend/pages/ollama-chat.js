@@ -50,8 +50,9 @@ export default function OllamaChatPage() {
   const [dialogModelTagSelections, setDialogModelTagSelections] = useState({});
   const [clearChatOnModelChange, setClearChatOnModelChange] = useState(false);
   const [modelToPull, setModelToPull] = useState('');
-  const [isPullingModel, setIsPullingModel] = useState(false);
-  const [pullProgress, setPullProgress] = useState({ message: '', percentage: null });
+  const [activePulls, setActivePulls] = useState({});
+  const [selectedModelForTagSelection, setSelectedModelForTagSelection] = useState(null);
+  const [chosenTag, setChosenTag] = useState('');
 
   const managedModels = useMemo(() => {
     let availableModels = [];
@@ -166,15 +167,33 @@ export default function OllamaChatPage() {
   const handleSendMessage = async () => {
     if (!message.trim() || !selectedModel) return;
 
-    const newUserMessage = { role: 'user', content: message };
-    setChatHistory(prev => [...prev, { sender: 'user', text: message }]);
+    const userMessageText = message;
+    setChatHistory(prev => [...prev, { id: crypto.randomUUID(), sender: 'user', text: userMessageText }]);
     setMessage('');
 
-    const apiMessages = chatHistory.map(chat => ({
-      role: chat.sender === 'user' ? 'user' : 'assistant', 
-      content: chat.text
-    }));
-    apiMessages.push(newUserMessage);
+    const apiMessages = chatHistory
+      .filter(chat => chat.sender === 'user' || (chat.sender === 'bot' && chat.text)) // Use previous bot messages that have content
+      .map(chat => ({
+        role: chat.sender === 'user' ? 'user' : 'assistant', 
+        content: chat.text
+      }));
+    apiMessages.push({ role: 'user', content: userMessageText });
+
+    const botMessageId = crypto.randomUUID();
+    const currentModelObject = managedModels.find(m => m.id === selectedModel);
+    const botModelName = currentModelObject?.name || selectedModel; // Fallback to ID if name not found
+    const rawStartTime = Date.now();
+
+    setChatHistory(prev => [...prev, {
+      id: botMessageId,
+      sender: 'bot',
+      modelName: botModelName,
+      text: '', // Initially empty
+      isLoading: true,
+      durationMs: null,
+      isThoughtCollapsed: true,
+      rawStartTime
+    }]);
 
     try {
       const response = await fetch('/api/ollama/chat', {
@@ -198,7 +217,8 @@ export default function OllamaChatPage() {
         let accumulatedResponse = '';
         let firstChunk = true;
 
-        setChatHistory(prev => [...prev, { sender: 'bot', text: '' }]);
+        // The initial bot message placeholder is already added above with isLoading: true.
+        // We will update it as chunks arrive.
 
         while (true) {
           const { value, done } = await reader.read();
@@ -211,14 +231,19 @@ export default function OllamaChatPage() {
               const parsedChunk = JSON.parse(line);
               if (parsedChunk.message && parsedChunk.message.content) {
                 accumulatedResponse += parsedChunk.message.content;
-                setChatHistory(prev => {
-                  const newHistory = [...prev];
-                  newHistory[newHistory.length - 1] = { sender: 'bot', text: accumulatedResponse };
-                  return newHistory;
-                });
+                setChatHistory(prev => prev.map(msg =>
+                  msg.id === botMessageId ? { ...msg, text: accumulatedResponse } : msg
+                ));
               }
               if (parsedChunk.done) {
                 console.log("Streaming complete:", parsedChunk);
+                // Final update for this message
+                const rawEndTime = Date.now();
+                setChatHistory(prev => prev.map(msg =>
+                  msg.id === botMessageId
+                    ? { ...msg, isLoading: false, durationMs: rawEndTime - msg.rawStartTime }
+                    : msg
+                ));
                 return;
               }
             } catch (e) {
@@ -227,24 +252,58 @@ export default function OllamaChatPage() {
           }
         }
       } else {
+        // Non-streamed response (should ideally not happen if stream: true is respected)
         const data = await response.json();
-        setChatHistory(prev => [...prev, { sender: 'bot', text: data.message?.content || "No response content" }]);
+        const rawEndTime = Date.now();
+        setChatHistory(prev => prev.map(msg =>
+          msg.id === botMessageId
+            ? { ...msg, text: data.message?.content || "No response content", isLoading: false, durationMs: rawEndTime - msg.rawStartTime }
+            : msg
+        ));
       }
 
     } catch (error) {
       console.error('Failed to send message or process stream:', error);
-      setChatHistory(prev => [...prev, { sender: 'bot', text: 'Error: Could not connect to the model.' }]);
+      const rawEndTime = Date.now();
+      setChatHistory(prev => prev.map(msg =>
+        msg.id === botMessageId
+          ? { ...msg, text: 'Error: Could not connect to the model.', isLoading: false, durationMs: rawEndTime - msg.rawStartTime }
+          : msg
+      ));
     }
   };
 
   const handlePullModel = async (modelNameToPull) => {
-    const finalModelName = typeof modelNameToPull === 'string' ? modelNameToPull : modelToPull;
-    if (!finalModelName.trim()) {
+    const finalModelName = typeof modelNameToPull === 'string' ? modelNameToPull.trim() : '';
+    if (!finalModelName) {
       toast.error("Please enter a model name to pull (e.g., mistral:latest).");
       return;
     }
-    setIsPullingModel(true);
-    setPullProgress({ message: `Initializing pull for ${finalModelName}...`, percentage: 0 });
+
+    if (activePulls[finalModelName] && !activePulls[finalModelName].isComplete && !activePulls[finalModelName].error) {
+      toast.info(`Model ${finalModelName} is already being pulled.`);
+      return;
+    }
+
+    const newAbortController = new AbortController(); // Create controller upfront
+
+    setActivePulls(prev => ({
+      ...prev,
+      [finalModelName]: {
+        modelName: finalModelName,
+        statusMessage: `Initializing pull for ${finalModelName}...`,
+        percentage: 0,
+        downloadRateBps: null,
+        currentDigest: null,
+        rateCalcLastTimestamp: null,
+        rateCalcLastCompletedBytes: null,
+        error: null,
+        isComplete: false,
+        abortController: newAbortController, // Store the pre-created controller
+        isCancelling: false, // New flag for cancellation UI state
+      }
+    }));
+
     toast.info(`Starting to pull model: ${finalModelName}... This may take a while.`);
 
     try {
@@ -254,58 +313,195 @@ export default function OllamaChatPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ name: finalModelName }),
+        signal: newAbortController.signal, // Use the signal from the pre-created controller
       });
 
       if (response.body) {
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-        let lastStatus = "";
+        
+        // Rate calculation variables specific to this pull, managed via setActivePulls
+        // Local copies for the loop, updated into state
+        let currentDigestForRate = null;
+        let lastTimestampForRate = null;
+        let lastCompletedBytesForRate = null;
+
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
           const lines = value.split('\n').filter(line => line.trim() !== '');
+
           for (const line of lines) {
             try {
               const parsed = JSON.parse(line);
-              if (parsed.status && parsed.status !== lastStatus) {
-                console.log(`Pull progress for ${finalModelName}: ${parsed.status}`);
-                lastStatus = parsed.status;
-                let percentage = null;
-                if (parsed.total && parsed.completed) {
-                  percentage = Math.round((parsed.completed / parsed.total) * 100);
-                }
-                setPullProgress({ message: `${finalModelName}: ${parsed.status}`, percentage });
+              let newPercentage = null;
+              let newDownloadRateBps = null;
+              let newStatusMessage = parsed.status || (activePulls[finalModelName]?.statusMessage || '');
+              
+              if (parsed.digest && parsed.digest !== currentDigestForRate) {
+                currentDigestForRate = parsed.digest;
+                lastTimestampForRate = Date.now();
+                lastCompletedBytesForRate = parsed.completed || 0;
+                newDownloadRateBps = null; // Reset rate for new layer
               }
+
+              if (parsed.total && parsed.completed) {
+                newPercentage = Math.round((parsed.completed / parsed.total) * 100);
+                
+                if (lastTimestampForRate && lastCompletedBytesForRate !== null && parsed.completed > lastCompletedBytesForRate) {
+                  const timeDiffSeconds = (Date.now() - lastTimestampForRate) / 1000;
+                  if (timeDiffSeconds >= 0.25) { // Update rate if enough time passed or significant byte change
+                    const bytesDiff = parsed.completed - lastCompletedBytesForRate;
+                    newDownloadRateBps = bytesDiff / timeDiffSeconds;
+                    lastTimestampForRate = Date.now();
+                    lastCompletedBytesForRate = parsed.completed;
+                  } else {
+                    // Keep previous rate if interval too short, unless it was null
+                    newDownloadRateBps = activePulls[finalModelName]?.downloadRateBps || null;
+                  }
+                } else if (parsed.completed === 0) {
+                    newDownloadRateBps = null; // Explicitly null if download hasn't started for this layer
+                }
+
+              } else if (parsed.status && !parsed.total) {
+                 // For statuses like "pulling manifest", keep current percentage or set to an indeterminate small value
+                 // newPercentage will remain null, so state update won't change it unless it was null
+              }
+
+
+              setActivePulls(prev => ({
+                ...prev,
+                [finalModelName]: {
+                  ...(prev[finalModelName] || {}),
+                  modelName: finalModelName,
+                  statusMessage: newStatusMessage,
+                  percentage: newPercentage !== null ? newPercentage : (prev[finalModelName]?.percentage || 0),
+                  downloadRateBps: newDownloadRateBps !== null ? newDownloadRateBps : (prev[finalModelName]?.downloadRateBps || null),
+                  currentDigest: currentDigestForRate || prev[finalModelName]?.currentDigest,
+                  rateCalcLastTimestamp: lastTimestampForRate || prev[finalModelName]?.rateCalcLastTimestamp,
+                  rateCalcLastCompletedBytes: lastCompletedBytesForRate !== null ? lastCompletedBytesForRate : prev[finalModelName]?.rateCalcLastCompletedBytes,
+                  error: parsed.error ? parsed.error : prev[finalModelName]?.error,
+                }
+              }));
+
               if (parsed.error) {
                 throw new Error(parsed.error);
               }
-            } catch (e) { /* ignore lines that are not json or don't have status */ }
+            } catch (e) { /* ignore lines that are not json or don't conform */ }
           }
         }
       }
 
       if (!response.ok) {
-        let errorMsg = `Failed to pull model. Status: ${response.status}`;
+        let errorMsg = `Failed to pull model ${finalModelName}. Status: ${response.status}`;
         try {
-            const errorData = await response.json();
+            const errorData = await response.json(); // Attempt to parse backend error
             errorMsg = errorData.error || errorMsg;
         } catch (e) { /* ignore if error response is not json */ }
         throw new Error(errorMsg);
       }
       
       toast.success(`Model ${finalModelName} pulled successfully! Refreshing local models...`);
-      setModelToPull('');
-      setPullProgress({ message: `Successfully pulled ${finalModelName}!`, percentage: 100 });
+      setActivePulls(prev => ({
+        ...prev,
+        [finalModelName]: {
+          ...(prev[finalModelName] || {}),
+          statusMessage: `Successfully pulled ${finalModelName}!`,
+          percentage: 100,
+          downloadRateBps: null,
+          isComplete: true,
+          error: null,
+        }
+      }));
+      // setModelToPull(''); // Don't clear, user might want to pull another variant or re-pull
+      
       const localModelsResponse = await fetch('/api/ollama/models');
       const localModelsData = await localModelsResponse.json();
       setLocalOllamaModels(localModelsData);
 
     } catch (error) {
-      console.error("Failed to pull model:", error);
-      toast.error(`Error pulling model ${finalModelName}: ${error.message}`);
-      setPullProgress({ message: `Error pulling ${finalModelName}: ${error.message}`, percentage: null });
-    } finally {
-      setIsPullingModel(false);
-      setTimeout(() => setPullProgress({ message: '', percentage: null }), 5000);
+      if (error.name === 'AbortError') {
+        toast.warn(`Pull for ${finalModelName} cancelled by user.`);
+        setActivePulls(prev => ({
+          ...prev,
+          [finalModelName]: {
+            ...(prev[finalModelName] || {}),
+            modelName: finalModelName,
+            statusMessage: `Pull for ${finalModelName} cancelled.`, 
+            percentage: prev[finalModelName]?.percentage || 0,
+            downloadRateBps: null,
+            error: 'Cancelled', // Specific error marker
+            isComplete: true,
+            isCancelling: false, // Reset cancelling flag
+            abortController: prev[finalModelName]?.abortController, 
+          }
+        }));
+      } else {
+        console.error(`Failed to pull model ${finalModelName}:`, error);
+        toast.error(`Error pulling model ${finalModelName}: ${error.message}`);
+        setActivePulls(prev => ({
+          ...prev,
+          [finalModelName]: {
+            ...(prev[finalModelName] || {}),
+            modelName: finalModelName,
+            statusMessage: `Error pulling ${finalModelName}: ${error.message.substring(0, 100)}...`,
+            percentage: prev[finalModelName]?.percentage || 0,
+            downloadRateBps: null,
+            error: error.message,
+            isComplete: true,
+            isCancelling: false, // Ensure cancelling flag is reset on other errors too
+            abortController: prev[finalModelName]?.abortController,
+          }
+        }));
+      }
+    } 
+    // finally {
+      // The pull entry remains in activePulls to show final status (complete/error)
+      // setIsPullingModel(false); // Removed
+      // setTimeout(() => setPullProgress({ message: '', percentage: null, downloadRateBps: null }), 5000); // Removed
+    // }
+  };
+
+  const handleCancelPull = (modelName) => {
+    setActivePulls(prev => {
+      const pullData = prev[modelName];
+      if (pullData && pullData.abortController && !pullData.isComplete && !pullData.error && !pullData.isCancelling) {
+        pullData.abortController.abort();
+        return {
+          ...prev,
+          [modelName]: {
+            ...pullData,
+            statusMessage: `Cancelling pull for ${modelName}...`,
+            isCancelling: true, // Set cancelling flag
+          }
+        };
+      }
+      return prev;
+    });
+  };
+
+  const handleClearFinishedPull = (modelName) => {
+    setActivePulls(prev => {
+      const newActivePulls = { ...prev };
+      if (newActivePulls[modelName] && newActivePulls[modelName].isComplete) {
+        delete newActivePulls[modelName];
+      }
+      return newActivePulls;
+    });
+  };
+
+  const handleDeleteModel = async (modelIdToDelete) => {
+    if (!modelIdToDelete) return;
+
+    if (!window.confirm(`Are you sure you want to delete the model: ${modelIdToDelete}? This action cannot be undone.`)) {
+      return;
+    }
+
+    toast.info(`Deleting model: ${modelIdToDelete}...`);
+    try {
+      // ... existing code ...
+    } catch (error) {
+      console.error(`Failed to delete model ${modelIdToDelete}:`, error);
+      toast.error(`Error deleting model ${modelIdToDelete}: ${error.message}`);
     }
   };
 
@@ -321,6 +517,12 @@ export default function OllamaChatPage() {
       </div>
     );
   }
+
+  const toggleThoughtCollapse = (messageId) => {
+    setChatHistory(prev => prev.map(msg =>
+      msg.id === messageId && msg.sender === 'bot' ? { ...msg, isThoughtCollapsed: !msg.isThoughtCollapsed } : msg
+    ));
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-theme(spacing.16)-theme(spacing.1)-1px)]">
@@ -377,23 +579,63 @@ export default function OllamaChatPage() {
                             <Select
                               onValueChange={(value) => {
                                 const selected = externalModelsForPulling.find(m => m.id === value);
+                                setSelectedModelForTagSelection(selected);
                                 if (selected) {
                                   let pullName = selected.name;
                                   if (selected.tags && selected.tags.length > 0) {
+                                    setChosenTag(selected.tags[0]);
                                     pullName += ':' + selected.tags[0];
+                                  } else {
+                                    setChosenTag('');
                                   }
                                   setModelToPull(pullName);
-                                  toast.info(`Selected: ${pullName}. Adjust tag if needed, then click Pull.`)
+                                  toast.info(`Selected: ${pullName}. Adjust tag if needed or select from tag dropdown, then click Pull.`)
+                                } else {
+                                  setSelectedModelForTagSelection(null);
+                                  setChosenTag('');
                                 }
                               }}
                             >
                               <SelectTrigger id="select-external-model" className="w-full">
                                 <SelectValue placeholder="Select a model from registry..." />
                               </SelectTrigger>
-                              <SelectContent className="max-h-56">
-                                {externalModelsForPulling.map(model => (
-                                  <SelectItem key={model.id} value={model.id}>
-                                    {model.name} ({model.tags && model.tags.length > 0 ? model.tags.join(', ') : 'latest'})
+                              <SelectContent className="max-h-56 border bg-popover text-popover-foreground shadow-md backdrop-blur-sm">
+                                {externalModelsForPulling.map(model => {
+                                  const isLocal = localOllamaModels.some(localModel => localModel.name.startsWith(model.name + ':') || localModel.name === model.name);
+                                  const displayName = `${model.name}${isLocal ? ' (local)' : ''}`;
+                                  return (
+                                    <SelectItem key={model.id} value={model.id}>
+                                      {displayName} ({model.tags && model.tags.length > 0 ? model.tags.join(', ') : 'latest'})
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {selectedModelForTagSelection && selectedModelForTagSelection.tags && selectedModelForTagSelection.tags.length > 0 && (
+                          <div className="grid grid-cols-[1fr_3fr] items-center gap-3 mt-3">
+                            <Label htmlFor="select-tag" className="text-right">
+                              Select Tag
+                            </Label>
+                            <Select
+                              value={chosenTag}
+                              onValueChange={(tag) => {
+                                setChosenTag(tag);
+                                if (selectedModelForTagSelection) {
+                                  const pullName = selectedModelForTagSelection.name + ':' + tag;
+                                  setModelToPull(pullName);
+                                  toast.info(`Set to pull: ${pullName}`);
+                                }
+                              }}
+                            >
+                              <SelectTrigger id="select-tag" className="w-full">
+                                <SelectValue placeholder="Select a tag..." />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-56 border bg-popover text-popover-foreground shadow-md backdrop-blur-sm">
+                                {selectedModelForTagSelection.tags.map(tag => (
+                                  <SelectItem key={tag} value={tag}>
+                                    {tag}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -411,29 +653,73 @@ export default function OllamaChatPage() {
                                 onChange={(e) => setModelToPull(e.target.value)}
                                 placeholder="e.g., llama3:latest" 
                                 className="min-w-0"
-                                disabled={isPullingModel}
+                                disabled={activePulls[modelToPull] && !activePulls[modelToPull].isComplete && !activePulls[modelToPull].error}
                             />
-                            <Button onClick={() => handlePullModel(modelToPull)} disabled={isPullingModel || !modelToPull.trim()} className="whitespace-nowrap">
-                                {isPullingModel ? 'Pulling...' : 'Pull'}
+                            <Button 
+                                onClick={() => handlePullModel(modelToPull)} 
+                                disabled={!modelToPull.trim() || (activePulls[modelToPull] && !activePulls[modelToPull].isComplete && !activePulls[modelToPull].error)}
+                                className="whitespace-nowrap"
+                            >
+                                {activePulls[modelToPull] && !activePulls[modelToPull].isComplete && !activePulls[modelToPull].error ? 'Pulling...' : 'Pull'}
                             </Button>
                         </div>
 
-                        {pullProgress.message && (
-                          <div className="text-sm text-muted-foreground">
-                            <p>{pullProgress.message}</p>
-                            {pullProgress.percentage !== null && (
-                              <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-1">
-                                <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${pullProgress.percentage}%` }}></div>
+                        {/* Display for multiple active pulls */}
+                        {Object.keys(activePulls).length > 0 && (
+                          <div className="mt-4 space-y-3">
+                            <h5 className="text-sm font-medium">Active Downloads:</h5>
+                            {Object.values(activePulls).map((pull) => (
+                              <div key={pull.modelName} className="text-xs p-2 border rounded-md">
+                                <p className="font-semibold truncate">{pull.modelName}</p>
+                                <p className="text-muted-foreground truncate">
+                                  {pull.percentage !== null && pull.percentage >= 0 && !pull.isComplete && !pull.error && `(${pull.percentage}%) `}
+                                  {pull.statusMessage}
+                                  {pull.downloadRateBps && pull.downloadRateBps > 0 && !pull.isComplete && !pull.error && ` (~${(pull.downloadRateBps / 1024 / 1024).toFixed(2)} MB/s)`}
+                                </p>
+                                {pull.percentage !== null && !pull.isComplete && !pull.error && (
+                                  <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700 mt-1">
+                                    <div 
+                                      className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-linear" 
+                                      style={{ width: `${pull.percentage}%` }}
+                                    ></div>
+                                  </div>
+                                )}
+                                {pull.error && <p className="text-red-500 mt-1">Error: {pull.error === 'Cancelled' ? 'Cancelled by user.' : pull.error}</p>}
+                                {pull.isComplete && !pull.error && <p className="text-green-500 mt-1">Status: Download complete!</p>}
+                                {pull.isComplete && pull.error === 'Cancelled' && <p className="text-yellow-500 mt-1">Status: Cancelled.</p>}
+                                {pull.isComplete && pull.error && pull.error !== 'Cancelled' && <p className="text-red-500 mt-1">Status: Failed.</p>}
+
+                                {!pull.isComplete && !pull.error && (
+                                   <Button 
+                                      variant="outline"
+                                      size="sm"
+                                      className="mt-2 w-full text-xs"
+                                      onClick={() => handleCancelPull(pull.modelName)}
+                                      disabled={pull.isComplete || !!pull.error || pull.isCancelling}
+                                    >
+                                      {pull.isCancelling ? 'Cancelling...' : 'Cancel Pull'}
+                                    </Button>
+                                )}
+                                {pull.isComplete && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-2 w-full text-xs"
+                                    onClick={() => handleClearFinishedPull(pull.modelName)}
+                                  >
+                                    Clear from list
+                                  </Button>
+                                )}
                               </div>
-                            )}
+                            ))}
                           </div>
                         )}
                         
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-xs text-muted-foreground pt-2"> {/* Adjusted padding */}
                             Browse available models and tags on <a href="https://ollama.com/library" target="_blank" rel="noopener noreferrer" className="underline">ollama.com/library</a>.
                         </div>
                        
-                        <div>
+                        <div className="mt-3"> {/* Added margin top */}
                           <h4 className="font-semibold mb-2">Available Local Models:</h4>
                           {localOllamaModels.length > 0 ? (
                               <ScrollArea className="h-40 border rounded-md p-2">
@@ -479,10 +765,57 @@ export default function OllamaChatPage() {
               <ScrollArea className="flex-grow border rounded-lg p-4 bg-muted">
                 {chatHistory.length === 0 && <p className="text-muted-foreground text-center">No messages yet.</p>}
                 {chatHistory.map((chat, index) => (
-                  <div key={index} className={`flex ${chat.sender === 'user' ? 'justify-end' : 'justify-start'} mb-2`}>
-                    <span className={`inline-block p-2 rounded-lg max-w-[70%] ${chat.sender === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                      {chat.text}
-                    </span>
+                  <div key={chat.id} className={`flex mb-3 ${chat.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {chat.sender === 'user' ? (
+                      <span className="inline-block p-2 px-3 rounded-lg max-w-[70%] bg-primary text-primary-foreground shadow">
+                        {chat.text}
+                      </span>
+                    ) : ( // Bot message
+                      <div className="flex flex-col items-start max-w-[75%]"> {/* Max width for the bot's entire content block */}
+                        {/* Thought Header */}
+                        <div 
+                          className="w-full p-1 text-xs text-muted-foreground/90 hover:text-muted-foreground cursor-pointer flex justify-between items-center rounded-t-md"
+                          onClick={() => toggleThoughtCollapse(chat.id)}
+                          aria-expanded={!chat.isThoughtCollapsed}
+                          aria-controls={`thought-content-${chat.id}`}
+                        >
+                          <span className="font-medium">
+                            Thought by {chat.modelName}
+                            {chat.isLoading && "..."}
+                            {!chat.isLoading && chat.durationMs !== null && ` (took ${(chat.durationMs / 1000).toFixed(1)}s)`}
+                          </span>
+                          <span className="text-xs">{chat.isThoughtCollapsed ? 'Show details ▼' : 'Hide details ▲'}</span>
+                        </div>
+                        
+                        {/* Collapsible Thought Content */}
+                        {!chat.isThoughtCollapsed && (
+                          <div 
+                            id={`thought-content-${chat.id}`} 
+                            className="w-full p-2.5 my-0 text-xs bg-stone-50 dark:bg-stone-800 border-x border-b border-stone-200 dark:border-stone-700 rounded-b-md shadow-inner space-y-1"
+                          >
+                            <p><strong>Model:</strong> {chat.modelName}</p>
+                            {chat.rawStartTime && <p><strong>Timestamp:</strong> {new Date(chat.rawStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>}
+                            {chat.durationMs !== null && !chat.isLoading && <p><strong>Generation Time:</strong> {(chat.durationMs / 1000).toFixed(2)} seconds</p>}
+                            <p><strong>Status:</strong> {chat.isLoading ? "Receiving response..." : "Complete."}</p>
+                            <p className="italic text-muted-foreground/70 pt-1">This section shows metadata about the model's response generation.</p>
+                          </div>
+                        )}
+                        
+                        {/* Actual Bot Message Bubble */}
+                        <span className={`inline-block p-2 px-3 rounded-lg mt-1.5 max-w-full bg-muted text-muted-foreground shadow ${!chat.isThoughtCollapsed ? 'rounded-t-none': ''}`}>
+                          {chat.text.trim() === '' && chat.isLoading ? 
+                              <span className="italic">Generating response...</span> : 
+                              (chat.text.trim() === '' && !chat.isLoading && chat.durationMs !== null ? 
+                                <span className="italic">(No text in response)</span> : 
+                                chat.text
+                              )
+                          }
+                          {chat.text.trim() === '' && !chat.isLoading && chat.durationMs === null && 
+                            <span className="italic text-red-500">(Error or empty stream)</span>
+                          }
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </ScrollArea>

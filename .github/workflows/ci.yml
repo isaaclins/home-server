@@ -32,7 +32,65 @@ jobs:
             home-server-image
           # Wait for services to start up
           echo "Waiting for services to start..."
-          sleep 45 # Increased sleep time just in case
+
+          # Wait for backend service (port 3002)
+          echo "Waiting for backend service (port 3002) to respond..."
+          MAX_ATTEMPTS_BACKEND=30 # 30 attempts * 5s = 150s max
+          SLEEP_DURATION=5
+          SUCCESS_BACKEND=false
+          for i in $(seq 1 $MAX_ATTEMPTS_BACKEND); do
+            if docker exec home-server-ci curl --output /dev/null --silent http://localhost:3002/; then
+              echo "Backend service responded."
+              SUCCESS_BACKEND=true
+              break
+            else
+              CURL_EXIT_CODE=$?
+              if [ $CURL_EXIT_CODE -eq 7 ]; then # Connection refused
+                echo "Attempt $i/$MAX_ATTEMPTS_BACKEND: Backend (3002) connection refused. Retrying in $SLEEP_DURATION seconds..."
+              else
+                # Other curl errors might indicate the server is up but returning an error on GET /, which is fine for a basic liveness check
+                # If server is up but GET / returns e.g. 404, curl might exit 0 or 22. We treat this as "up enough to try tests".
+                # However, for robustness, let's assume any non-zero exit means "not ready" for this simple check.
+                echo "Attempt $i/$MAX_ATTEMPTS_BACKEND: Backend (3002) not fully responsive (curl exit $CURL_EXIT_CODE). Retrying in $SLEEP_DURATION seconds..."
+              fi
+            fi
+            sleep $SLEEP_DURATION
+          done
+
+          if [ "$SUCCESS_BACKEND" = "false" ]; then
+            echo "Backend service (port 3002) failed to respond after $MAX_ATTEMPTS_BACKEND attempts."
+            echo "Displaying container logs:"
+            docker logs home-server-ci
+            exit 1
+          fi
+
+          # Wait for frontend service (port 3000)
+          echo "Waiting for frontend service (port 3000) to respond..."
+          MAX_ATTEMPTS_FRONTEND=24 # 24 attempts * 5s = 120s max
+          SUCCESS_FRONTEND=false
+          for i in $(seq 1 $MAX_ATTEMPTS_FRONTEND); do
+            # Frontend root should return 2xx or 3xx, so --fail is appropriate
+            if docker exec home-server-ci curl --output /dev/null --silent --head --fail http://localhost:3000/; then
+              echo "Frontend service responded successfully."
+              SUCCESS_FRONTEND=true
+              break
+            else
+              CURL_EXIT_CODE=$?
+              if [ $CURL_EXIT_CODE -eq 7 ]; then # Connection refused
+                 echo "Attempt $i/$MAX_ATTEMPTS_FRONTEND: Frontend (3000) connection refused. Retrying in $SLEEP_DURATION seconds..."
+              else
+                 echo "Attempt $i/$MAX_ATTEMPTS_FRONTEND: Frontend (3000) not ready or returned error (curl exit $CURL_EXIT_CODE). Retrying in $SLEEP_DURATION seconds..."
+              fi
+            fi
+            sleep $SLEEP_DURATION
+          done
+
+          if [ "$SUCCESS_FRONTEND" = "false" ]; then
+            echo "Frontend service (port 3000) failed to respond successfully after $MAX_ATTEMPTS_FRONTEND attempts."
+            echo "Displaying container logs:"
+            docker logs home-server-ci
+            exit 1
+          fi
 
       - name: Check Frontend Homepage (via container)
         run: docker exec home-server-ci curl --fail --silent --show-error http://localhost:3000/ | cat
