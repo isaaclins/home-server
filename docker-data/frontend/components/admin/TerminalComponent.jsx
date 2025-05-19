@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Terminal } from 'xterm';
-import { AttachAddon } from 'xterm-addon-attach';
 import { FitAddon } from 'xterm-addon-fit';
 import io from 'socket.io-client';
 import { getAuthToken } from '@/lib/auth';
@@ -20,6 +19,7 @@ const TerminalComponent = () => {
   const socketRef = useRef(null); // To hold the socket instance
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState(null);
+  const initializedRef = useRef(false);
 
   const fitTerminal = useCallback(() => {
     if (fitAddonRef.current && xtermRef.current) {
@@ -37,10 +37,20 @@ const TerminalComponent = () => {
   }, []);
 
   useEffect(() => {
-    if (!terminalRef.current || xtermRef.current) {
-      // Don't initialize if ref is not ready or already initialized
-      return;
+    // Prevent double initialization
+    if (!terminalRef.current || initializedRef.current) return;
+    initializedRef.current = true;
+
+    // Cleanup any previous terminal/socket
+    if (xtermRef.current) {
+      xtermRef.current.dispose();
+      xtermRef.current = null;
     }
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    fitAddonRef.current = null;
 
     console.log("Initializing xterm...");
     const term = new Terminal({
@@ -62,7 +72,7 @@ const TerminalComponent = () => {
     term.open(terminalRef.current);
     fitAddon.fit(); // Initial fit
 
-    console.log(`Attempting to connect WebSocket to ${terminalSocketUrl}`);
+    // Always get the latest token
     const token = getAuthToken();
     if (!token) {
         setError('Authentication token not found. Cannot connect terminal.');
@@ -75,11 +85,21 @@ const TerminalComponent = () => {
         auth: { token }, // Send token for backend verification
         reconnectionAttempts: 3, // Limit reconnection attempts
         timeout: 5000, // Connection timeout
+        transports: ['websocket'], // Force websocket for stability
     });
     socketRef.current = socket;
 
-    const attachAddon = new AttachAddon(socket);
-    term.loadAddon(attachAddon);
+    // --- Manual event wiring instead of AttachAddon ---
+    // Write PTY output to terminal
+    socket.on('terminal.output', (data) => {
+      term.write(data);
+    });
+    // Send terminal input to PTY
+    term.onData((data) => {
+      if (socket.connected) {
+        socket.emit('terminal.input', data);
+      }
+    });
 
     socket.on('connect', () => {
         console.log('Terminal WebSocket connected.');
@@ -114,6 +134,7 @@ const TerminalComponent = () => {
 
     // Cleanup on component unmount
     return () => {
+        initializedRef.current = false;
         console.log("Cleaning up terminal component...");
         window.removeEventListener('resize', fitTerminal);
         if (socketRef.current) {

@@ -19,10 +19,10 @@ const port = process.env.PORT || DEFAULT_PORT; // Port for the backend server
 // Ensure JWT_SECRET is defined. It's good that it's dynamically generated on start for development,
 // but for production, you'd want this to be a persistent environment variable.
 const JWT_SECRET =
-  process.env.JWT_SECRET || require("crypto").randomBytes(32).toString("hex");
+  process.env.JWT_SECRET || require("crypto").randomBytes(256).toString("hex");
 if (
   process.env.NODE_ENV !== "production" &&
-  JWT_SECRET === require("crypto").randomBytes(32).toString("hex")
+  JWT_SECRET === require("crypto").randomBytes(256).toString("hex")
 ) {
   console.warn(
     "JWT_SECRET is dynamically generated. For production, set a persistent JWT_SECRET environment variable."
@@ -34,6 +34,201 @@ let ollamaProcess = null; // Added for Ollama service management
 
 // Database path (assuming server.js is in docker-data/backend, and DB is in docker-data/data)
 const dbPath = path.resolve(__dirname, "../data/home_server.db");
+
+// --- Authentication Middleware Definition ---
+const authenticateJWT = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    const token = authHeader.split(" ")[1]; // Expecting "Bearer TOKEN"
+    if (!token) {
+      // If no token after "Bearer ", it's malformed. Log and proceed without user.
+      // This allows public routes to work without authentication.
+      console.warn('Malformed authorization header: Bearer token missing.');
+      return next(); // Proceed without setting req.user
+    }
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err) {
+        // Invalid token (expired, wrong secret, etc.)
+        // Depending on strictness, you might block here or just proceed without user.
+        // For now, proceed without user, let protected routes handle missing req.user.
+        console.warn('JWT Verification Error:', err.message);
+        // Optionally, you could explicitly set req.user = null here.
+        return next(); // Proceed without setting req.user
+      }
+      req.user = user; // Add user payload to request object
+      next();
+    });
+  } else {
+    // No Authorization header at all. This is normal for public routes.
+    next(); // Proceed without setting req.user
+  }
+};
+
+// --- Authorization Middleware (Admin Check) Definition ---
+const authorizeAdmin = (req, res, next) => {
+  // This middleware MUST run AFTER authenticateJWT has populated req.user
+  if (req.user && req.user.isAdmin) {
+    next();
+  } else if (req.user) {
+    // User is authenticated but not admin
+     res.status(403).json({ error: "Forbidden: Administrator access required" });
+  } else {
+     // User is not authenticated at all (authenticateJWT called next() without setting req.user)
+     res.status(401).json({ error: "Unauthorized: Authentication required" });
+  }
+};
+
+// --- Gitea API Routes ---
+const GITEA_DATA_DIR = path.resolve(__dirname, "../gitea-data");
+const GITEA_PORT = 3003;
+let giteaProcess = null;
+
+const checkGiteaServiceStatus = async () => {
+  try {
+    // Gitea web UI responds on / with a login page (HTML), so just check for 200 OK
+    const response = await fetch(`http://localhost:${GITEA_PORT}`);
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+};
+
+// GET Gitea service status
+app.get(
+  "/api/gitea/service/status",
+  authenticateJWT,
+  authorizeAdmin,
+  async (req, res) => {
+    const isRunning = await checkGiteaServiceStatus();
+    if (isRunning) {
+      res.json({ status: "RUNNING", message: "Gitea service is running." });
+    } else if (giteaProcess) {
+      res.json({
+        status: "STARTING_OR_ERROR",
+        message:
+          "Gitea service was started by the backend but might not be healthy or is still initializing.",
+      });
+    } else {
+      res.json({
+        status: "STOPPED",
+        message: "Gitea service is not running or not reachable.",
+      });
+    }
+  }
+);
+
+// POST to start Gitea service
+app.post(
+  "/api/gitea/service/start",
+  authenticateJWT,
+  authorizeAdmin,
+  async (req, res) => {
+    if (giteaProcess || (await checkGiteaServiceStatus())) {
+      return res.status(400).json({
+        message:
+          "Gitea service is already running or an attempt was made to start it.",
+      });
+    }
+    try {
+      const child = spawn(
+        "/usr/local/bin/gitea",
+        [
+          "web",
+          "--port",
+          GITEA_PORT.toString(),
+          "--work-path",
+          GITEA_DATA_DIR,
+          "--custom-path",
+          GITEA_DATA_DIR,
+          "--config",
+          `${GITEA_DATA_DIR}/app.ini`,
+        ],
+        {
+          detached: true,
+          stdio: "inherit",
+        }
+      );
+      child.unref();
+      giteaProcess = child;
+      res.status(202).json({ message: "Gitea service starting... Check status endpoint." });
+      child.on("error", (err) => {
+        console.error("Failed to start Gitea process:", err);
+        giteaProcess = null;
+      });
+      child.on("exit", (code, signal) => {
+        console.log(`Gitea process exited with code ${code} and signal ${signal}`);
+        giteaProcess = null;
+      });
+    } catch (error) {
+      console.error("Error starting Gitea service:", error);
+      res.status(500).json({
+        error: "Failed to start Gitea service",
+        details: error.message,
+      });
+    }
+  }
+);
+
+// POST to stop Gitea service
+app.post(
+  "/api/gitea/service/stop",
+  authenticateJWT,
+  authorizeAdmin,
+  async (req, res) => {
+    if (giteaProcess) {
+      try {
+        const killed = giteaProcess.kill();
+        if (killed) {
+          giteaProcess = null;
+          res.json({ message: "Gitea service stop signal sent." });
+        } else {
+          res.status(500).json({
+            message:
+              "Failed to send stop signal to Gitea service (it might have already exited).",
+          });
+        }
+      } catch (error) {
+        console.error("Error stopping Gitea service:", error);
+        giteaProcess = null;
+        res.status(500).json({
+          error: "Error stopping Gitea service",
+          details: error.message,
+        });
+      }
+    } else {
+      const isRunning = await checkGiteaServiceStatus();
+      if (isRunning) {
+        return res.status(400).json({
+          message:
+            "Gitea service appears to be running but was not started by this backend instance. Manual stop might be required or use `gitea` CLI.",
+        });
+      }
+      res.status(404).json({
+        message:
+          "Gitea service not managed by this backend instance or already stopped.",
+      });
+    }
+  }
+);
+
+// --- Public Gitea Repositories Endpoint ---
+// Returns all public repositories from the local Gitea instance
+app.get("/api/gitea/public-repos", async (req, res) => {
+  try {
+    // Gitea API: GET /api/v1/repos/search?limit=100&private=false
+    const response = await fetch(`http://localhost:${GITEA_PORT}/api/v1/repos/search?limit=100&private=false`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status).json({ error: `Gitea API error: ${response.statusText}. ${errorText}` });
+    }
+    const data = await response.json();
+    // data.data is the array of repositories
+    res.json(data.data || []);
+  } catch (error) {
+    console.error("Error fetching public Gitea repositories:", error);
+    res.status(500).json({ error: "Failed to fetch public repositories", details: error.message });
+  }
+});
 
 // --- Create HTTP server and Socket.IO server --- (Assuming structure from previous explanation)
 const server = http.createServer(app);
@@ -72,27 +267,27 @@ terminalNamespace.use((socket, next) => {
             console.error("Terminal connection JWT verification failed:", err.message);
             return next(new Error('Authentication error: Invalid token'));
         }
-        // Check if user is admin
-        if (!decoded || !decoded.isAdmin) {
-            console.warn("Terminal connection attempt by non-admin user:", decoded?.username);
-            return next(new Error('Authorization error: Admin privileges required'));
-        }
         // Store user info on the socket for later use if needed
-        socket.user = decoded; 
+        socket.user = decoded;
         next();
     });
 });
 
 terminalNamespace.on('connection', (socket) => {
-    console.log(`Admin user ${socket.user.username} connected to terminal namespace`);
-
-    // Spawn a pseudo-terminal process
-    const ptyProcess = pty.spawn(shell, [], {
+    const user = socket.user;
+    const username = user.username;
+    const roles = user.roles || [];
+    if (!roles.includes('_web_terminal_user')) {
+        socket.emit('terminal.output', '\r\n\x1b[31mAccess denied: You do not have web terminal access.\x1b[0m\r\n');
+        socket.disconnect();
+        return;
+    }
+    // Spawn a pseudo-terminal process as the Linux user
+    const ptyProcess = pty.spawn('sudo', ['-u', username, 'bash'], {
         name: 'xterm-color',
-        // Determine initial cols/rows from handshake query or use defaults
         cols: parseInt(socket.handshake.query.cols) || 80,
         rows: parseInt(socket.handshake.query.rows) || 24,
-        cwd: process.env.HOME, // Start in the user's home directory (within the container)
+        cwd: `/home/${username}`,
         env: process.env
     });
 
@@ -137,49 +332,6 @@ app.use(express.json()); // Middleware to parse JSON bodies
 function hashPassword(password) {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
-
-// --- Authentication Middleware Definition ---
-const authenticateJWT = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader) {
-    const token = authHeader.split(" ")[1]; // Expecting "Bearer TOKEN"
-    if (!token) {
-      // If no token after "Bearer ", it's malformed. Log and proceed without user.
-      // This allows public routes to work without authentication.
-      console.warn('Malformed authorization header: Bearer token missing.');
-      return next(); // Proceed without setting req.user
-    }
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-      if (err) {
-        // Invalid token (expired, wrong secret, etc.)
-        // Depending on strictness, you might block here or just proceed without user.
-        // For now, proceed without user, let protected routes handle missing req.user.
-        console.warn('JWT Verification Error:', err.message);
-        // Optionally, you could explicitly set req.user = null here.
-        return next(); // Proceed without setting req.user
-      }
-      req.user = user; // Add user payload to request object
-      next();
-    });
-  } else {
-    // No Authorization header at all. This is normal for public routes.
-    next(); // Proceed without setting req.user
-  }
-};
-
-// --- Authorization Middleware (Admin Check) Definition ---
-const authorizeAdmin = (req, res, next) => {
-  // This middleware MUST run AFTER authenticateJWT has populated req.user
-  if (req.user && req.user.isAdmin) {
-    next();
-  } else if (req.user) {
-    // User is authenticated but not admin
-     res.status(403).json({ error: "Forbidden: Administrator access required" });
-  } else {
-     // User is not authenticated at all (authenticateJWT called next() without setting req.user)
-     res.status(401).json({ error: "Unauthorized: Authentication required" });
-  }
-};
 
 // --- Logging Middleware Definition ---
 const logRequestAndEmit = (req, res, next) => {
@@ -393,12 +545,11 @@ app.get("/api/users", authenticateJWT, authorizeAdmin, (req, res) => {
 });
 
 // POST a new user (Admin only)
-app.post("/api/users", authenticateJWT, authorizeAdmin, (req, res) => {
-  const { username, email, password, isAdmin } = req.body;
+app.post("/api/users", authenticateJWT, authorizeAdmin, async (req, res) => {
+  const { username, email, password, isAdmin, roles } = req.body;
 
   // Basic validation
   if (!username || !password) {
-    // Email is optional for now based on schema (TEXT UNIQUE, not NOT NULL)
     return res
       .status(400)
       .json({ error: "Username and password are required" });
@@ -406,10 +557,11 @@ app.post("/api/users", authenticateJWT, authorizeAdmin, (req, res) => {
   if (typeof isAdmin !== "boolean") {
     return res.status(400).json({ error: "isAdmin field must be a boolean" });
   }
-  // Add more validation as needed (e.g., password complexity, email format if not null)
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: "Invalid email format." });
   }
+  let rolesArr = Array.isArray(roles) ? roles : [];
+  const rolesJson = JSON.stringify(rolesArr);
 
   const hashedPassword = hashPassword(password);
 
@@ -420,13 +572,11 @@ app.post("/api/users", authenticateJWT, authorizeAdmin, (req, res) => {
     }
   });
 
-  const sql = `INSERT INTO users (username, email, hashed_password, is_admin) VALUES (?, ?, ?, ?)`;
-  // is_admin from request body will be 0 or 1, matching schema after boolean conversion
+  const sql = `INSERT INTO users (username, email, hashed_password, is_admin, roles) VALUES (?, ?, ?, ?, ?)`;
   db.run(
     sql,
-    [username, email || null, hashedPassword, isAdmin ? 1 : 0],
-    function (err) {
-      // Use function() to get this.lastID
+    [username, email || null, hashedPassword, isAdmin ? 1 : 0, rolesJson],
+    async function (err) {
       if (err) {
         console.error("POST /api/users - DB insert error:", err.message);
         db.close();
@@ -443,11 +593,24 @@ app.post("/api/users", authenticateJWT, authorizeAdmin, (req, res) => {
       }
       const newUserId = this.lastID;
       db.close();
+      // If user has _web_terminal_user role, create a Linux user
+      if (rolesArr.includes('_web_terminal_user')) {
+        try {
+          // Create the Linux user with the same username and password
+          // Note: This is a basic example. In production, handle errors, check for existing users, and secure password passing.
+          await execAsync(`id -u ${username} || sudo useradd -m -s /bin/bash ${username}`);
+          await execAsync(`echo '${username}:${password}' | sudo chpasswd`);
+        } catch (e) {
+          console.error(`Failed to create Linux user for ${username}:`, e.message);
+          // Optionally: return error or just log
+        }
+      }
       res.status(201).json({
         id: newUserId,
         username,
         email: email || null,
         isAdmin,
+        roles: rolesArr,
         message: "User created successfully",
       });
     }
@@ -1084,6 +1247,102 @@ app.post(
     }
   }
 );
+
+// --- System Stats API ---
+const systemStatsHistory = {
+  cpu: [], // { time, value }
+  memory: [],
+  storage: [],
+  network: [],
+};
+const HISTORY_LENGTH = 20;
+let lastNetBytes = null;
+let lastNetTime = null;
+
+function collectSystemStats() {
+  const now = Date.now();
+  // CPU
+  const cpus = os.cpus();
+  const cpuLoad = cpus.reduce((acc, cpu) => {
+    const total = Object.values(cpu.times).reduce((a, b) => a + b, 0);
+    return acc + (1 - cpu.times.idle / total);
+  }, 0) / cpus.length * 100;
+  systemStatsHistory.cpu.push({ time: now, value: cpuLoad });
+  if (systemStatsHistory.cpu.length > HISTORY_LENGTH) systemStatsHistory.cpu.shift();
+
+  // Memory
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  const memPercent = (usedMem / totalMem) * 100;
+  systemStatsHistory.memory.push({ time: now, value: memPercent, used: usedMem, total: totalMem });
+  if (systemStatsHistory.memory.length > HISTORY_LENGTH) systemStatsHistory.memory.shift();
+
+  // Storage (use root fs only)
+  // Use 'df -k /' for Linux, fallback to 0 if not available
+  let storagePercent = 0, storageUsed = 0, storageTotal = 0;
+  try {
+    const df = require('child_process').execSync('df -k /').toString().split('\n')[1].split(/\s+/);
+    storageTotal = parseInt(df[1]) * 1024;
+    storageUsed = parseInt(df[2]) * 1024;
+    storagePercent = (storageUsed / storageTotal) * 100;
+  } catch (e) {}
+  systemStatsHistory.storage.push({ time: now, value: storagePercent, used: storageUsed, total: storageTotal });
+  if (systemStatsHistory.storage.length > HISTORY_LENGTH) systemStatsHistory.storage.shift();
+
+  // Network (sum all interfaces, bytes per second)
+  const net = os.networkInterfaces();
+  let rx = 0, tx = 0;
+  for (const iface of Object.values(net)) {
+    for (const addr of iface) {
+      if (!addr.internal && addr.family === 'IPv4') {
+        rx += addr.rx_bytes || 0;
+        tx += addr.tx_bytes || 0;
+      }
+    }
+  }
+  // Fallback: use /proc/net/dev if available (Linux only)
+  if (process.platform === 'linux') {
+    try {
+      const lines = require('fs').readFileSync('/proc/net/dev', 'utf8').split('\n').slice(2);
+      rx = 0; tx = 0;
+      for (const line of lines) {
+        const cols = line.trim().split(/\s+/);
+        if (cols.length >= 10) {
+          rx += parseInt(cols[1]);
+          tx += parseInt(cols[9]);
+        }
+      }
+    } catch (e) {}
+  }
+  let netMbps = 0;
+  if (lastNetBytes && lastNetTime) {
+    const deltaRx = rx - lastNetBytes.rx;
+    const deltaTx = tx - lastNetBytes.tx;
+    const deltaTime = (now - lastNetTime) / 1000;
+    netMbps = ((deltaRx + deltaTx) / deltaTime) / 1024 / 1024; // MB/s
+  }
+  lastNetBytes = { rx, tx };
+  lastNetTime = now;
+  systemStatsHistory.network.push({ time: now, value: netMbps });
+  if (systemStatsHistory.network.length > HISTORY_LENGTH) systemStatsHistory.network.shift();
+}
+setInterval(collectSystemStats, 3000); // Collect every 3s
+
+app.get('/api/system/stats', (req, res) => {
+  // Return the last HISTORY_LENGTH points for each metric
+  res.json({
+    cpu: systemStatsHistory.cpu,
+    memory: systemStatsHistory.memory,
+    storage: systemStatsHistory.storage,
+    network: systemStatsHistory.network,
+    meta: {
+      cpu: { cores: os.cpus().length, model: os.cpus()[0]?.model },
+      memory: { total: os.totalmem() },
+      storage: { }, // Could add mount info
+    }
+  });
+});
 
 // --- Start the HTTP server with Port Check ---
 server.listen(port, () => {

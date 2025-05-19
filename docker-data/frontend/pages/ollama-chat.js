@@ -541,7 +541,7 @@ export default function OllamaChatPage() {
                   <SelectTrigger id="model-select" className="w-full min-w-0">
                     <SelectValue placeholder="Select a model" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="border bg-popover text-popover-foreground shadow-md backdrop-blur-sm">
                     {managedModels.length > 0 ? (
                       managedModels.map(model => (
                         <SelectItem key={model.id} value={model.id}>{model.name} ({model.details?.family || 'N/A'})</SelectItem>
@@ -780,7 +780,7 @@ export default function OllamaChatPage() {
                           aria-controls={`thought-content-${chat.id}`}
                         >
                           <span className="font-medium">
-                            Thought by {chat.modelName}
+                            Response by {chat.modelName}
                             {chat.isLoading && "..."}
                             {!chat.isLoading && chat.durationMs !== null && ` (took ${(chat.durationMs / 1000).toFixed(1)}s)`}
                           </span>

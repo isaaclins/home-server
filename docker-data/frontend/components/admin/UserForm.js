@@ -21,6 +21,10 @@ import { cn } from "@/lib/utils";
 export const AVAILABLE_ROLES = [
   { id: '_ollama_user', label: 'Ollama Chat User', description: 'Can access and use the Ollama chat service.' },
   { id: '_general_admin_access', label: 'General Admin Access', description: 'Can access general administrative sections.' },
+  { id: '_web_terminal_user', label: 'Web Terminal Access', description: 'Can access the browser-based web terminal. (Creates a Linux user)' },
+  { id: '_file_service_user', label: 'File Service Access', description: 'Can access the file service.' },
+  { id: '_gitea_user', label: 'Gitea Access', description: 'Can access the Gitea service.' },
+  { id: '_paas_user', label: 'PaaS Access', description: 'Can access the PaaS service.' },
   // Add more roles here as needed, e.g.:
   // { id: '_file_service_user', label: 'File Service User', description: 'Can access the file service.' },
 ];

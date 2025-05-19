@@ -16,7 +16,7 @@ APP_DIR="${SCRIPT_DIR}"
 ensure_dir_exists() {
     local directory_path="$1"
     mkdir -p "$directory_path"
-    echo "Directory '$directory_path' checked/created."
+    echo "Directory '$directory_path' checked/created." > /dev/null
 }
 
 hash_password() {
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 EOF
-    echo "Data directory and database tables checked/created at '$DB_NAME'."
+    echo "Data directory and database tables checked/created at '$DB_NAME'." > /dev/null
 }
 
 admin_user_exists_in_db() {
@@ -152,7 +152,7 @@ create_data_dir_and_db_tables
 if ! admin_user_exists_in_db; then
     # Check for environment variables for non-interactive setup
     if [ -n "$INITIAL_ADMIN_USER" ] && [ -n "$INITIAL_ADMIN_EMAIL" ] && [ -n "$INITIAL_ADMIN_PASSWORD" ]; then
-        echo "Environment variables for initial admin found. Attempting non-interactive setup..."
+        echo "Environment variables for initial admin found. Attempting non-interactive setup..." > /dev/null
         if add_admin_user_to_db "$INITIAL_ADMIN_USER" "$INITIAL_ADMIN_PASSWORD" "$INITIAL_ADMIN_EMAIL"; then
              echo "--- Initial Admin User Setup Complete (Non-Interactive) ---"
         else
@@ -167,14 +167,6 @@ if ! admin_user_exists_in_db; then
 else
     echo "Admin user already exists in the database. Skipping admin setup."
 fi
-echo "[Phase 1/2] Database and admin user setup complete."
-echo # Blank line for readability
-
-
-echo # Blank line for readability
-
-# 2. Run Application
-echo "[Phase 2/2] Starting application servers..."
 
 if [ ! -d "$APP_DIR" ]; then
     echo "Error: Application directory '$APP_DIR' not found. Cannot start servers."
@@ -182,58 +174,33 @@ if [ ! -d "$APP_DIR" ]; then
 fi
 
 cd "$APP_DIR"
-echo "Changed directory to $(pwd) for running npm."
-
-print_server_info() {
-    echo ""
-    echo "--- Server Information ---"
-    echo "Frontend Next.js app expected at: http://localhost:3000"
-    echo "Backend Express API expected at:  http://localhost:3001"
-    echo "Ollama API (if installed and 'ollama serve' is run): http://localhost:11434"
-    echo "Ensure Docker ports are mapped correctly (e.g., -p 3000:3000 -p 3001:3001)."
-    echo "Application logs will follow."
-    echo ""
-}
-
-print_server_info
 
 # Start Ollama service in the background
-echo "Starting Ollama service in the background..."
 ollama serve &
 OLLAMA_PID=$!
-echo "Ollama service started with PID $OLLAMA_PID."
 
-# Give Ollama a moment to start up (optional, adjust as needed)
+# Start Gitea service in the background
+GITEA_DATA_DIR="${SCRIPT_DIR}/gitea-data"
+GITEA_PORT=3003
+GITEA_LOG="${GITEA_DATA_DIR}/gitea.log"
+
+# Ensure Gitea data directory exists
+ensure_dir_exists "$GITEA_DATA_DIR"
+
+# Start Gitea (web UI on 3003)
+sudo -u gitea /usr/local/bin/gitea web --port $GITEA_PORT --work-path "$GITEA_DATA_DIR" --custom-path "$GITEA_DATA_DIR" --config "$GITEA_DATA_DIR/app.ini" > "$GITEA_LOG" 2>&1 &
+GITEA_PID=$!
+echo "Started Gitea (PID $GITEA_PID) on port $GITEA_PORT. Logs: $GITEA_LOG"
+
+# Give Ollama and Gitea a moment to start up (optional, adjust as needed)
 sleep 5 
 
-print_server_info
-
 # Start the application (e.g., using concurrently via npm script) in the background
-echo "Starting main application (npm run dev) in the background..."
 npm run dev &
 NPM_DEV_PID=$!
-echo "Main application 'npm run dev' started with PID $NPM_DEV_PID."
-echo # Blank line
 
-echo "---------------------------------------------------------------------"
-echo "Development environment is running."
-echo " - Frontend Next.js app expected at: http://localhost:3000"
-echo " - Backend Express API expected at:  http://localhost:3001 (Note: dev.sh maps host port 3002 to container port 3002 by default. If backend listens on 3001, dev.sh should map e.g. -p 3002:3001)"
-echo " - Ollama API (internally): http://localhost:11434"
-echo
-echo "Services running in the background (inside container):"
-echo " - Ollama (PID $OLLAMA_PID)"
-echo " - Main application 'npm run dev' (PID $NPM_DEV_PID)"
-echo
-echo "You are now in an interactive bash shell inside the container: $(pwd)"
-echo "You can inspect files, run commands, etc."
-echo "To stop the development environment and exit the container, type 'exit' in this shell."
-echo "---------------------------------------------------------------------"
 bash
 
-# --- Cleanup after interactive shell exits ---
-echo # Blank line
-echo "Interactive shell exited. Cleaning up background processes..."
 
 # Send SIGTERM first, then wait, then SIGKILL if necessary (more graceful)
 echo "Attempting to gracefully stop main application (npm run dev - PID $NPM_DEV_PID)..."
@@ -252,6 +219,15 @@ if wait $OLLAMA_PID 2>/dev/null; then
 else
     echo "Ollama service did not stop gracefully or was already stopped. Sending SIGKILL if process still exists..."
     kill -9 $OLLAMA_PID 2>/dev/null || echo "Ollama service (PID $OLLAMA_PID) already stopped or not found."
+fi
+
+echo "Attempting to gracefully stop Gitea service (PID $GITEA_PID)..."
+kill $GITEA_PID 2>/dev/null
+if wait $GITEA_PID 2>/dev/null; then
+    echo "Gitea service stopped gracefully."
+else
+    echo "Gitea service did not stop gracefully or was already stopped. Sending SIGKILL if process still exists..."
+    kill -9 $GITEA_PID 2>/dev/null || echo "Gitea service (PID $GITEA_PID) already stopped or not found."
 fi
 
 echo "=== Application Setup and Run Script Finished ===="

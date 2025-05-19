@@ -1,114 +1,73 @@
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import { useAuthContext } from '@/context/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import { getAuthToken, setAuthToken } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+
+const API_BASE_URL = "http://localhost:3002/api";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const router = useRouter();
-  const { isAuthenticated, loading } = useAuthContext();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Redirect to dashboard if already logged in
-    const token = localStorage.getItem('jwtToken');
-    if (token) {
-      router.push('/dashboard');
+    if (getAuthToken()) {
+      router.replace("/dashboard");
     }
   }, [router]);
 
-  useEffect(() => {
-    // Only redirect if loading is complete and user is not authenticated.
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, loading, router]);
-
-  const handleSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
-
+    setLoading(true);
+    setError("");
     try {
-      const res = await fetch('http://localhost:3002/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
-
       const data = await res.json();
-
-      if (res.ok && data.success && data.token) {
-        localStorage.setItem('jwtToken', data.token);
-        router.push('/dashboard');
-      } else {
-        setError(data.error || 'Login failed. Please check your credentials.');
-      }
+      if (!res.ok) throw new Error(data.error || "Login failed");
+      setAuthToken(data.token);
+      router.replace("/dashboard");
     } catch (err) {
-      console.error('Login request failed:', err);
-      setError('An unexpected error occurred. Please try again.');
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Render loading state or null while checking auth to prevent flash of content
-  if (loading || !isAuthenticated) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <p>Loading...</p> {/* Or a proper spinner */}
-      </div>
-    );
-  }
-
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>
-            Enter your username and password to access your dashboard.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="username" /*className="block text-sm font-medium text-gray-700"*/ >Username</label>
-              <Input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                placeholder="Enter your username"
-                //className="mt-1"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="password" /*className="block text-sm font-medium text-gray-700"*/>Password</label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Enter your password"
-                //className="mt-1"
-              />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full">
-              Login
-            </Button>
-          </form>
-        </CardContent>
-        {/* <CardFooter>
-          {/* You can add footer content here if needed, e.g., "Forgot password?" link *\/}
-        </CardFooter> */}
-      </Card>
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <form onSubmit={handleLogin} className="bg-card p-8 rounded shadow-md w-full max-w-sm">
+        <h1 className="text-2xl font-bold mb-6">Login</h1>
+        {error && <div className="mb-4 text-red-500">{error}</div>}
+        <div className="mb-4">
+          <label className="block mb-1 font-medium">Username</label>
+          <input
+            className="w-full px-3 py-2 border rounded"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            required
+            autoFocus
+          />
+        </div>
+        <div className="mb-6">
+          <label className="block mb-1 font-medium">Password</label>
+          <input
+            className="w-full px-3 py-2 border rounded"
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Logging in..." : "Login"}
+        </Button>
+      </form>
     </div>
   );
 } 

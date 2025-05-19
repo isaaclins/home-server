@@ -60,7 +60,24 @@ RUN if [ -d "/app/docker-data/node_modules/tailwindcss" ]; then \
 
 WORKDIR /app/docker-data
 
+# --- Gitea Installation ---
+# Download Gitea (latest stable release)
+RUN curl -L -o /usr/local/bin/gitea https://dl.gitea.io/gitea/1.21.11/gitea-1.21.11-linux-amd64 \
+    && chmod +x /usr/local/bin/gitea
+
+# Create Gitea data directory
+RUN mkdir -p /app/docker-data/gitea-data
+
+# Expose Gitea web port
+EXPOSE 3003
+
 EXPOSE 3000
 EXPOSE 3001
+
+# --- Add gitea user for running Gitea as non-root ---
+RUN useradd -m -d /home/gitea -s /bin/bash gitea \
+    && chown -R gitea:gitea /app/docker-data
+
+USER gitea
 
 CMD ["bash", "run-setup.sh"]
