@@ -6,22 +6,74 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Cpu, Activity, HardDrive, Wifi, MessageCircle, GitBranch, Terminal } from "lucide-react";
 import Link from "next/link";
+import { useAuthContext } from '@/context/AuthContext';
+import { useRouter } from 'next/router';
+import { getAuthToken } from '@/lib/auth';
 
 const API_BASE_URL = "http://localhost:3002/api";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
+  const { user, loading: authLoading } = useAuthContext();
+  const router = useRouter();
 
   useEffect(() => {
-    const fetchStats = async () => {
-      const res = await fetch(`${API_BASE_URL}/system/stats`);
-      const data = await res.json();
-      setStats(data);
-    };
-    fetchStats();
-    const interval = setInterval(fetchStats, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!authLoading && !user) {
+      router.replace('/login?redirect=/dashboard');
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    // Only fetch stats if the user is authenticated
+    if (user) {
+      const fetchStats = async () => {
+        try {
+          const token = getAuthToken(); // Get token for authenticated requests
+          if (!token) {
+            // This case should ideally be handled by the auth check above,
+            // but as a safeguard:
+            console.warn("No auth token found, cannot fetch stats.");
+            // router.replace('/login?redirect=/dashboard'); // Optionally redirect again
+            return;
+          }
+          const res = await fetch(`${API_BASE_URL}/system/stats`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          if (!res.ok) {
+            // Handle errors, e.g., token expired or invalid
+            // For now, just log and don't set stats
+            console.error("Failed to fetch system stats:", res.status);
+            if (res.status === 401 || res.status === 403) {
+                // It's good practice to also clear the token and redirect if it's invalid
+                // import { removeAuthToken } from '@/lib/auth'; // you'd need to create this
+                // removeAuthToken(); 
+                router.replace('/login?redirect=/dashboard&error=session_expired');
+            }
+            return;
+          }
+          const data = await res.json();
+          setStats(data);
+        } catch (error) {
+          console.error("Error fetching system stats:", error);
+          // Potentially redirect or show an error message to the user
+        }
+      };
+      fetchStats();
+      const interval = setInterval(fetchStats, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [user, router]); // Add router to dependency array if using it inside for redirect
+
+  if (authLoading || !user) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>Loading dashboard...</p>
+        {/* You can add a spinner or a more sophisticated loading skeleton here */}
+      </div>
+    );
+  }
 
   return (
     <DashboardShell>

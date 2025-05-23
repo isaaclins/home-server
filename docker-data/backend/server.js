@@ -1329,7 +1329,7 @@ function collectSystemStats() {
 }
 setInterval(collectSystemStats, 3000); // Collect every 3s
 
-app.get('/api/system/stats', (req, res) => {
+app.get('/api/system/stats', authenticateJWT, (req, res) => {
   // Return the last HISTORY_LENGTH points for each metric
   res.json({
     cpu: systemStatsHistory.cpu,

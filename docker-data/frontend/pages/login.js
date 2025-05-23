@@ -53,7 +53,6 @@ export default function LoginPage() {
       if (!response.ok) {
         const errorMessage = result.error || 'Login failed. Please check your credentials.';
         toast.error(errorMessage);
-        logout();
         return;
       }
 
@@ -62,12 +61,10 @@ export default function LoginPage() {
         router.push('/dashboard');
       } else {
         toast.error('Login failed. No token received.');
-        logout();
       }
     } catch (error) {
       console.error("Login error:", error);
       toast.error(error.message || 'An unexpected error occurred during login.');
-      logout();
     } finally {
       setIsLoading(false);
     }

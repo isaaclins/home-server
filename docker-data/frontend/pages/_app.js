@@ -37,7 +37,9 @@ function useGlobalJwtErrorHandler() {
             errorMsg.toLowerCase().includes('invalid')
           ) {
             logout();
-            throw new Error('Session expired or invalid. Please log in again.');
+            if (router.pathname !== '/login') {
+              throw new Error('Session expired or invalid. Please log in again.');
+            }
           }
         }
         return response;
