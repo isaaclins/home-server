@@ -7,10 +7,31 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy and run your local install_ollama.sh script
+ARG OLLAMA_VERSION=""
+ARG TARGETARCH=amd64
+ENV OLLAMA_DOWNLOAD_URL=https://ollama.com/download/ollama-linux-${TARGETARCH}.tgz
+
+# Download Ollama
+RUN mkdir -p /tmp/ollama-download && \
+    curl --fail --show-error --location --progress-bar -o /tmp/ollama-download/ollama-linux-${TARGETARCH}.tgz "${OLLAMA_DOWNLOAD_URL}${OLLAMA_VERSION:+?version=$OLLAMA_VERSION}"
+
+# Copy your local install_ollama.sh script - this is needed to place ollama in the right system dirs
 COPY docker-data/install_ollama.sh /tmp/install_ollama.sh
-RUN chmod +x /tmp/install_ollama.sh && \
-    /tmp/install_ollama.sh
+RUN chmod +x /tmp/install_ollama.sh
+
+# Install Ollama from the downloaded tarball using parts of your script logic
+# This simplified RUN command assumes the tarball is already downloaded and focuses on extraction and placement.
+# The original script handles /usr/local/bin and /usr/local/lib.
+RUN mkdir -p /usr/local/bin /usr/local/lib/ollama && \
+    tar -xzf /tmp/ollama-download/ollama-linux-${TARGETARCH}.tgz -C /usr/local && \
+    if [ -f "/usr/local/ollama" ] && [ ! -f "/usr/local/bin/ollama" ]; then mv "/usr/local/ollama" "/usr/local/bin/ollama"; fi && \
+    if [ -d "/usr/local/lib/ollama" ]; then echo "Ollama lib dir exists."; else mkdir -p "/usr/local/lib/ollama"; fi && \
+    # The default ollama-linux-amd64.tgz might not create /usr/local/lib/ollama directly,
+    # or might place all libraries directly into /usr/local/lib.
+    # Ensure the target copy path for the main stage exists.
+    # If the tgz extracts to a specific subdirectory like 'ollama/lib' inside /usr/local/lib, adjust COPY in main stage.
+    echo "Ollama installed to /usr/local/bin and /usr/local/lib"
+
 
 # --- Main Application Stage ---
 FROM --platform=linux/amd64 node:22-slim
