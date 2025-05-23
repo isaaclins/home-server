@@ -24,12 +24,12 @@ jobs:
       - name: Run Docker container and wait for services
         run: |
           docker run -d --name home-server-ci \
-            -p 3000:3000 \
-            -p 3002:3002 \
-            -e INITIAL_ADMIN_USER=testadmin \
-            -e INITIAL_ADMIN_EMAIL=test@example.com \
-            -e INITIAL_ADMIN_PASSWORD=password \
-            home-server-image bash -c "bash docker-data/run-setup.sh && echo 'CI WORKAROUND: run-setup.sh complete, keeping container alive with sleep infinity.' && sleep infinity"
+          -p 3000:3000 \
+          -p 3002:3002 \
+          -e INITIAL_ADMIN_USER=testadmin \
+          -e INITIAL_ADMIN_EMAIL=test@example.com \
+          -e INITIAL_ADMIN_PASSWORD=password \
+          home-server-image bash -c "bash run-setup.sh && echo 'CI WORKAROUND: run-setup.sh complete, keeping container alive with sleep infinity.' && sleep infinity"
 
           echo "Waiting for container to stabilize..."
           MAX_CONTAINER_CHECKS=12 # Check for up to 60 seconds
