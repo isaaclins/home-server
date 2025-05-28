@@ -18,140 +18,31 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build main Docker image
         run: docker build -t home-server-image .
 
-      - name: Run Docker container and wait for services
+      - name: Build test runner Docker image
+        run: docker build -t home-server-test-runner -f Dockerfile.test .
+
+      - name: Run tests in Docker container
         run: |
-          docker run -d --name home-server-ci \
-          -p 3000:3000 \
-          -p 3002:3002 \
-          -e INITIAL_ADMIN_USER=testadmin \
-          -e INITIAL_ADMIN_EMAIL=test@example.com \
-          -e INITIAL_ADMIN_PASSWORD=password \
-          home-server-image bash -c "bash run-setup.sh; echo \\"CI WORKAROUND: run-setup.sh script finished (initialization exit code was \\$? ), container will be kept alive with sleep infinity.\\"; sleep infinity"
+          echo "Starting test runner container..."
+          # We need to map the same ports as before if run-setup.sh tries to bind to them,
+          # even if we don't access them from the host directly in this step.
+          # The tests run internally via localhost:port in the container.
+          # The --init flag helps with signal handling for the entrypoint script.
+          # We also give it a name for easier log retrieval if needed, though the run command itself will show logs.
+          docker run --name home-server-ci-tests --init -p 3000:3000 -p 3002:3002 home-server-test-runner
 
-          echo "Waiting for container to stabilize..."
-          MAX_CONTAINER_CHECKS=12 # Check for up to 60 seconds
-          CONTAINER_CHECK_INTERVAL=5
-          CONTAINER_RUNNING=false
-          for i in $(seq 1 $MAX_CONTAINER_CHECKS); do
-            if docker ps --filter name=home-server-ci --filter status=running --quiet | grep -q .; then
-              echo "Container home-server-ci is running (Attempt $i/$MAX_CONTAINER_CHECKS)."
-              CONTAINER_RUNNING=true
-              # Give some time for services inside to potentially start before proceeding to next stage of checks
-              # The main service checks below have their own sleeps and retries
-              sleep $CONTAINER_CHECK_INTERVAL 
-              break 
-            else
-              echo "Container home-server-ci is not running or exited. Checking again in $CONTAINER_CHECK_INTERVAL seconds... (Attempt $i/$MAX_CONTAINER_CHECKS)"
-            fi
-            sleep $CONTAINER_CHECK_INTERVAL
-          done
+          # The job will fail if the `docker run` command above fails (i.e., test script exits with non-zero)
+          echo "Test runner container finished."
 
-          if [ "$CONTAINER_RUNNING" = "false" ]; then
-            echo "Container home-server-ci failed to start or stay running."
-            echo "Displaying final logs from container home-server-ci:"
-            docker logs home-server-ci || echo "Could not retrieve logs for home-server-ci (it might have been removed or never started properly)."
-            exit 1
-          fi
-
-          echo "Container home-server-ci is running. Proceeding with service health checks."
-          # Wait for services to start up
-          echo "Waiting for services to start..."
-
-          # Wait for backend service (port 3002)
-          echo "Waiting for backend service (port 3002) to respond..."
-          MAX_ATTEMPTS_BACKEND=30 # 30 attempts * 5s = 150s max
-          SLEEP_DURATION=5
-          SUCCESS_BACKEND=false
-          for i in $(seq 1 $MAX_ATTEMPTS_BACKEND); do
-            if docker exec home-server-ci curl --output /dev/null --silent http://localhost:3002/; then
-              echo "Backend service responded."
-              SUCCESS_BACKEND=true
-              break
-            else
-              CURL_EXIT_CODE=$?
-              if [ $CURL_EXIT_CODE -eq 7 ]; then # Connection refused
-                echo "Attempt $i/$MAX_ATTEMPTS_BACKEND: Backend (3002) connection refused. Retrying in $SLEEP_DURATION seconds..."
-              else
-                # Other curl errors might indicate the server is up but returning an error on GET /, which is fine for a basic liveness check
-                # If server is up but GET / returns e.g. 404, curl might exit 0 or 22. We treat this as "up enough to try tests".
-                # However, for robustness, let's assume any non-zero exit means "not ready" for this simple check.
-                echo "Attempt $i/$MAX_ATTEMPTS_BACKEND: Backend (3002) not fully responsive (curl exit $CURL_EXIT_CODE). Retrying in $SLEEP_DURATION seconds..."
-              fi
-            fi
-            sleep $SLEEP_DURATION
-          done
-
-          if [ "$SUCCESS_BACKEND" = "false" ]; then
-            echo "Backend service (port 3002) failed to respond after $MAX_ATTEMPTS_BACKEND attempts."
-            echo "Displaying container logs:"
-            docker logs home-server-ci
-            exit 1
-          fi
-
-          # Wait for frontend service (port 3000)
-          echo "Waiting for frontend service (port 3000) to respond..."
-          MAX_ATTEMPTS_FRONTEND=24 # 24 attempts * 5s = 120s max
-          SUCCESS_FRONTEND=false
-          for i in $(seq 1 $MAX_ATTEMPTS_FRONTEND); do
-            # Frontend root should return 2xx or 3xx, so --fail is appropriate
-            if docker exec home-server-ci curl --output /dev/null --silent --head --fail http://localhost:3000/; then
-              echo "Frontend service responded successfully."
-              SUCCESS_FRONTEND=true
-              break
-            else
-              CURL_EXIT_CODE=$?
-              if [ $CURL_EXIT_CODE -eq 7 ]; then # Connection refused
-                 echo "Attempt $i/$MAX_ATTEMPTS_FRONTEND: Frontend (3000) connection refused. Retrying in $SLEEP_DURATION seconds..."
-              else
-                 echo "Attempt $i/$MAX_ATTEMPTS_FRONTEND: Frontend (3000) not ready or returned error (curl exit $CURL_EXIT_CODE). Retrying in $SLEEP_DURATION seconds..."
-              fi
-            fi
-            sleep $SLEEP_DURATION
-          done
-
-          if [ "$SUCCESS_FRONTEND" = "false" ]; then
-            echo "Frontend service (port 3000) failed to respond successfully after $MAX_ATTEMPTS_FRONTEND attempts."
-            echo "Displaying container logs:"
-            docker logs home-server-ci
-            exit 1
-          fi
-
-      - name: Check Frontend Homepage (via container)
-        run: docker exec home-server-ci curl --fail --silent --show-error http://localhost:3000/ | cat
-
-      - name: Check Frontend Login Page (via container)
-        run: docker exec home-server-ci curl --fail --silent --show-error http://localhost:3000/login | cat
-
-      - name: Check Backend Health and Authenticated Route (via container)
-        run: |
-          docker exec home-server-ci bash -c \
-          'echo "Attempting login to backend..." && \
-           LOGIN_RESPONSE=$(curl --silent --show-error -X POST -H "Content-Type: application/json" \
-             -d "{\"username\":\"testadmin\",\"password\":\"password\"}" \
-             http://localhost:3002/api/auth/login) && \
-           echo "Login response: $LOGIN_RESPONSE" && \
-           TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*' | grep -o '[^"]*$') && \
-           if [ -z "$TOKEN" ]; then \
-             echo "Login failed or token not found in response." && \
-             exit 1; \
-           else \
-             echo "Token acquired." && \
-             echo "Checking /api/users (authenticated route)..." && \
-             curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" http://localhost:3002/api/users | cat && \
-             echo "Checking /api/logs (authenticated admin route)..." && \
-             curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" http://localhost:3002/api/logs | cat; \
-           fi'
-
-      - name: Check Ollama Chat Page (via container)
-        run: docker exec home-server-ci curl --fail --silent --show-error http://localhost:3000/ollama-chat | cat
-
-      - name: Display Docker logs on failure
+      - name: Display Docker logs on failure (if any)
         if: failure()
-        run: docker logs home-server-ci
+        run: |
+          echo "CI job failed. Displaying logs from test runner container (if it exists)..."
+          docker logs home-server-ci-tests || echo "Could not retrieve logs for home-server-ci-tests."
 
-      - name: Stop and remove Docker container
+      - name: Clean up test runner Docker container
         if: always() # Ensure cleanup even if steps fail
-        run: docker rm -f home-server-ci || true
+        run: docker rm -f home-server-ci-tests || true
