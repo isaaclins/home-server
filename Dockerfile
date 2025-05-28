@@ -38,7 +38,7 @@ FROM --platform=linux/amd64 node:22-slim
 
 # Install system dependencies for your application
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends sqlite3 git coreutils curl python3 build-essential ca-certificates && \
+    apt-get install -y --no-install-recommends sqlite3 git coreutils curl python3 build-essential ca-certificates procps && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
