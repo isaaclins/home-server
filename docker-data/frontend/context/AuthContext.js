@@ -22,7 +22,7 @@ export function AuthProvider({ children }) {
     const newUser = getUserFromToken(); // Decode the new token
     setUser(newUser);
     toast.success('Login successful! Redirecting...');
-    router.push('/dashboard'); // Redirect after login
+    router.push('/services'); // Redirect after login to /services
   }, [router]);
 
   const logout = useCallback(() => {
