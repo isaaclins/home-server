@@ -1,10 +1,12 @@
 #!/bin/bash
 set -e # Exit immediately if a command exits with a non-zero status.
 
+RUN_SETUP_LOG_FILE="/tmp/run-setup.log"
+
 # Start the main application setup in the background
-echo "Starting application via run-setup.sh in background..."
+echo "Starting application via run-setup.sh in background... Output logged to $RUN_SETUP_LOG_FILE"
 # Ensure run-setup.sh is found relative to the WORKDIR /app in the Docker image
-bash /app/docker-data/run-setup.sh &
+bash /app/docker-data/run-setup.sh > "$RUN_SETUP_LOG_FILE" 2>&1 &
 RUN_SETUP_PID=$!
 echo "run-setup.sh started with PID $RUN_SETUP_PID"
 
@@ -21,6 +23,11 @@ cleanup() {
             echo "run-setup.sh (PID $RUN_SETUP_PID) and its children terminated gracefully."
         else
             echo "run-setup.sh (PID $RUN_SETUP_PID) did not terminate gracefully or was already stopped. Forcing kill if necessary."
+            if [ -f "$RUN_SETUP_LOG_FILE" ]; then
+                echo "--- Log output from run-setup.sh (PID $RUN_SETUP_PID) ---"
+                cat "$RUN_SETUP_LOG_FILE"
+                echo "--- End of log output from run-setup.sh (PID $RUN_SETUP_PID) ---"
+            fi
             # If run-setup.sh's trap did not kill all children (e.g. ollama, npm),
             # we might need more specific cleanup here, but run-setup.sh's trap is preferred.
             # As a fallback, try to kill the process group if it exists and is different from PID
@@ -32,6 +39,11 @@ cleanup() {
         fi
     else
         echo "run-setup.sh (PID $RUN_SETUP_PID) already exited or was not found."
+        if [ -f "$RUN_SETUP_LOG_FILE" ]; then
+            echo "--- Log output from run-setup.sh (PID $RUN_SETUP_PID) ---"
+            cat "$RUN_SETUP_LOG_FILE"
+            echo "--- End of log output from run-setup.sh (PID $RUN_SETUP_PID) ---"
+        fi
     fi
 
     # Additional check for Ollama as run-setup.sh might not always clean it perfectly on forceful exit
@@ -64,7 +76,8 @@ echo "Waiting for backend service (port 3002) to respond..."
 for i in $(seq 1 $MAX_ATTEMPTS_BACKEND); do
   if ! ps -p $RUN_SETUP_PID > /dev/null; then
       echo "run-setup.sh (PID $RUN_SETUP_PID) exited prematurely. Aborting tests."
-      exit 1
+      # The cleanup trap will handle printing logs and exiting
+      exit 1 # This will trigger the cleanup trap
   fi
   if curl --output /dev/null --silent --head http://localhost:3002/; then # Using --head for lighter check
     echo "Backend service responded."
@@ -93,7 +106,8 @@ echo "Waiting for frontend service (port 3000) to respond..."
 for i in $(seq 1 $MAX_ATTEMPTS_FRONTEND); do
   if ! ps -p $RUN_SETUP_PID > /dev/null; then
       echo "run-setup.sh (PID $RUN_SETUP_PID) exited prematurely. Aborting tests."
-      exit 1
+      # The cleanup trap will handle printing logs and exiting
+      exit 1 # This will trigger the cleanup trap
   fi
   if curl --output /dev/null --silent --head --fail http://localhost:3000/; then
     echo "Frontend service responded successfully."
