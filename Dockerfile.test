@@ -1,10 +1,14 @@
 FROM home-server-image AS base
 
+USER root
+
 # Copy test scripts into the image
 COPY ./test-scripts /test-scripts
 
 # Make the main test script executable
 RUN chmod +x /test-scripts/run-ci-tests.sh
+
+USER gitea
 
 # Set environment variables that might be needed by run-setup.sh or tests
 # These are the same as what was used in the original docker run command in ci.yml
