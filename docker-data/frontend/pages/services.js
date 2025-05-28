@@ -1,5 +1,5 @@
-# This is a placeholder for the file's content as we are renaming it.
-# The actual content will be added in the next step when modifying services.js.
+// This is a placeholder for the file's content as we are renaming it.
+// The actual content will be added in the next step when modifying services.js.
 import DashboardShell from "@/components/DashboardShell";
 import SystemStats from "@/components/SystemStats";
 import ResourceChart from "@/components/ResourceChart";
