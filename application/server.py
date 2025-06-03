@@ -1,10 +1,19 @@
-import flask
+import os
+from flask import Flask, send_from_directory
 
-app = flask.Flask(__name__)
+app = Flask(__name__)
 
-@app.route("/")
+# Define the directory for pages
+PAGES_DIR = '/pages'
+
+@app.route('/')
 def index():
-    return flask.render_template("login.html")
+    # Serve index.html as the default page
+    return send_from_directory(PAGES_DIR, 'index.html')
 
-if __name__ == "__main__":
-    app.run(debug=True)
+@app.route('/<path:filename>')
+def serve_page(filename):
+    return send_from_directory(PAGES_DIR, filename)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=3000)

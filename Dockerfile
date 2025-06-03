@@ -2,9 +2,11 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY ./application/requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY . .
+COPY ./application/server.py .
+COPY ./application/pages /pages
 
+EXPOSE 3000
 CMD ["python", "server.py"]
