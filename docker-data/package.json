@@ -29,7 +29,7 @@
     "js-cookie": "^3.0.5",
     "jsonwebtoken": "^9.0.2",
     "jwt-decode": "^4.0.0",
-    "lucide-react": "^0.417.0",
+    "lucide-react": "^0.522.0",
     "negotiator": "^0.6.3",
     "next": "^15.3.2",
     "next-auth": "^5.0.0-beta.19",
