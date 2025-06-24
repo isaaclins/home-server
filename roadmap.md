@@ -35,17 +35,16 @@
 
 ### 1.1 Backend – `auth-service`
 
-| Task                                        | Details                                                                                                | Status |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------ |
-| ⬜️ Scaffold Spring Boot project            | New Maven module under `backend/auth-service`.                                                         | ⬜️    |
-| ⬜️ Entities                                | `User(id, username, passwordHash, mustChangePwd, enabled)`, `Role(id, name)`, join table `user_roles`. | ⬜️    |
-| ⬜️ Password Policy                         | SHA-512 pre-hash → BCrypt (72-byte limit workaround).                                                  | ⬜️    |
-| ⬜️ Seed super-admin                        | On first run, detect empty `user` table → create `admin` with random pwd (log to console).             | ⬜️    |
-| ⬜️ JWT issuance                            | `/api/auth/login` returns Access + Refresh tokens.                                                     | ⬜️    |
-| ⬜️ Change-password endpoint                | `/api/auth/password` (requires old pwd unless `mustChangePwd=true`).                                   | ⬜️    |
-| ⬜️ Global Security Filter                  | • Reject if `mustChangePwd` and path ≠ `/password`.                                                    |
-| • Attach `username` to request log context. | ⬜️                                                                                                    |
-| ⬜️ Request Logging                         | Persist `(ts, username, method, path, status)` to table `request_log`.                                 | ⬜️    |
+| Task                            | Details                                                                                                | Status |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------ | ------ |
+| ✅ Scaffold Spring Boot project | New Maven module under `backend/auth-service`.                                                         | ✅     |
+| ✅ Entities                     | `User(id, username, passwordHash, mustChangePwd, enabled)`, `Role(id, name)`, join table `user_roles`. | ✅     |
+| ✅ Password Policy              | SHA-512 pre-hash → BCrypt (72-byte limit workaround).                                                  | ✅     |
+| ✅ Seed super-admin             | On first run, detect empty `user` table → create `admin` with random pwd (log to console).             | ✅     |
+| ✅ JWT issuance                 | `/api/auth/login` returns Access + Refresh tokens.                                                     | ✅     |
+| ✅ Change-password endpoint     | `/api/auth/password` (requires old pwd unless `mustChangePwd=true`).                                   | ✅     |
+| ✅ Global Security Filter       | Rejects if `mustChangePwd` and path ≠ `/password`; attaches `username` to request log context.         | ✅     |
+| ✅ Request Logging              | Persist `(ts, username, method, path, status)` to table `request_log`.                                 | ✅     |
 
 ### 1.2 Frontend
 
