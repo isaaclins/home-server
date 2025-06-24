@@ -1,0 +1,25 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Roadmap-Driven Test Coverage Rule
+
+Every task listed in [roadmap.md](mdc:roadmap.md) **must have an automated test** (shell script, unit test, or E2E script) that proves the task's exit criteria.
+
+## Script location & naming
+1. Place shell/E2E scripts in `scripts/`.
+2. Name them using the pattern `PHASE.TASK-slug-test.sh` (e.g. `1.2-testscript.sh`, `3.1-chat-endpoint-test.sh`).
+3. Unit tests live beside the code they verify (`*_Test.java`, `*.spec.tsx`, etc.).
+
+## Script content conventions
+• Non-interactive, pass `--yes` flags where available.  
+• Exit with non-zero status on any failure.  
+• Spin-up/tear-down the full stack as needed (see `1.2-testscript.sh` for reference).  
+• Echo clear step numbers and final ✅/❌ result.
+
+## CI integration
+The CI pipeline runs `bash scripts/*-test.sh` after `docker compose up -d --build`. A missing/ failing script fails the build.
+
+## Updating the rule
+When a new task is added to the roadmap, add its corresponding test skeleton in the same PR. Mark the roadmap task ✅ only after its test passes.
