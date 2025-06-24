@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Roadmap Compliance Rule
+
+The living development plan for this repository is maintained in [roadmap.md](mdc:roadmap.md).
+
+## What this means for you
+1. **Alignment** – All new features, refactors, and docs must map to an open task or milestone in the roadmap. If your change is not represented, update the roadmap first.
+2. **Status Tracking** – Update the relevant task status emoji (⬜️/🔄/✅) in the roadmap as part of your pull request.
+3. **Exit Criteria** – Ensure the phase-specific exit criteria in the roadmap are met before marking a task complete.
+4. **Review Checklist** – Code reviewers should reject or request changes for PRs that bypass or neglect the roadmap.
+
+Keeping [roadmap.md](mdc:roadmap.md) accurate is **mandatory** for project visibility and planning. Always verify it before merging.
