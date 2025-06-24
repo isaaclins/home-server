@@ -17,15 +17,12 @@
 
 ## Phase 0 – Repository Skeleton & Local Dev Environment (½ day)
 
-| Task                                   | Details                                                                                      | Owner | Status |
-| -------------------------------------- | -------------------------------------------------------------------------------------------- | ----- | ------ |
-| ⬜️ **Create folder layout**           | `backend/`, `frontend/`, `infra/`, `scripts/`                                                | —     | ⬜️    |
-| ⬜️ **Bootstrap `docker-compose.yml`** | • Services: MySQL (no schema), Ollama (no models), Spring Boot **stub** (exposes `/health`). |
-
-• Mount MySQL volume.  
-• Pass GPU to Ollama (`--gpus all`). | — | ⬜️ |
-| ⬜️ **Spring Boot stub** | `backend/gateway-service` (single module) returns `200 OK` on `/health`. Use Maven (change later if needed). | — | ⬜️ |
-| ⬜️ **Add README** | Include quick-start: `git clone… → docker compose up -d → curl localhost:8080/health`. | — | ⬜️ |
+| Task                                  | Details                                                                | Owner | Status |
+| ------------------------------------- | ---------------------------------------------------------------------- | ----- | ------ |
+| ✅ **Create folder layout**           | `backend/`, `frontend/`, `infra/`, `scripts/`                          | —     | ✅     |
+| ✅ **Bootstrap `docker-compose.yml`** | MySQL (empty schema), Ollama (no models), Spring Boot stub (`/health`) | —     | ✅     |
+| ✅ **Spring Boot stub**               | `backend/gateway-service` returns `200 OK` on `/health`                | —     | ✅     |
+| ✅ **Add README**                     | Quick-start with `docker compose up` + health curl                     | —     | ✅     |
 
 **Exit Criteria**
 

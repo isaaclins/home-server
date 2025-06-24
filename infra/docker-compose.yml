@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.1
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: home_server
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    # GPU note: On systems with NVIDIA GPUs you can enable acceleration by either
+    # 1) uncommenting the `runtime: nvidia` line below **and**
+    #    running Docker with the NVIDIA Container Toolkit installed, **or**
+    # 2) using an override file (e.g. docker-compose.gpu.yml) to add
+    #    `deploy.resources.reservations.devices`.
+    # Leaving these settings out ensures the stack also runs on machines
+    # without GPUs (e.g., macOS dev boxes).
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
+  gateway:
+    build: ../backend/gateway-service
+    container_name: gateway-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - ollama
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      MYSQL_URL: jdbc:mysql://mysql:3306/home_server
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysql-data:
+  ollama-data:
