@@ -5,13 +5,12 @@ import com.isaaclins.homeserverexamplejava.entity.SystemConfig;
 import com.isaaclins.homeserverexamplejava.repository.SystemConfigRepository;
 import com.isaaclins.homeserverexamplejava.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.nio.charset.StandardCharsets;
 
 @Service
 public class SetupService {
@@ -26,10 +25,9 @@ public class SetupService {
     @Autowired
     private UserRepository userRepository;
 
-    @Value("${app.security.pepper:default-pepper-change-in-production}")
-    private String pepper;
+    @Autowired
+    private PasswordHashingService passwordHashingService;
 
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(12);
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
@@ -51,32 +49,6 @@ public class SetupService {
     }
 
     /**
-     * Hash password with salt and pepper
-     */
-    private String hashPasswordWithSaltAndPepper(String password, String salt) {
-        String pepperedPassword = password + pepper + salt;
-        return passwordEncoder.encode(pepperedPassword);
-    }
-
-    /**
-     * Verify password against stored hash
-     */
-    public boolean verifyMasterPassword(String password) {
-        var saltConfig = systemConfigRepository.findByConfigKey(MASTER_SALT_KEY);
-        var passwordConfig = systemConfigRepository.findByConfigKey(MASTER_PASSWORD_KEY);
-
-        if (saltConfig.isEmpty() || passwordConfig.isEmpty()) {
-            return false;
-        }
-
-        String salt = saltConfig.get().getConfigValue();
-        String storedHash = passwordConfig.get().getConfigValue();
-        String pepperedPassword = password + pepper + salt;
-
-        return passwordEncoder.matches(pepperedPassword, storedHash);
-    }
-
-    /**
      * Perform the master password setup only
      */
     @Transactional
@@ -90,15 +62,16 @@ public class SetupService {
             throw new IllegalArgumentException("Master passwords do not match");
         }
 
-        // Generate salt and hash master password
+        // Generate salt and hash master password using custom secure hashing (no
+        // BCrypt)
         String masterSalt = generateSalt();
-        String hashedMasterPassword = hashPasswordWithSaltAndPepper(setupRequest.getMasterPassword(), masterSalt);
+        String hashedMasterPassword = hashPasswordSecurely(setupRequest.getMasterPassword(), masterSalt);
 
         // Save master password and salt
         systemConfigRepository.save(new SystemConfig(
                 MASTER_PASSWORD_KEY,
                 hashedMasterPassword,
-                "Master password hash for user registration"));
+                "Master password hash for user registration (PBKDF2 + SHA-512)"));
 
         systemConfigRepository.save(new SystemConfig(
                 MASTER_SALT_KEY,
@@ -110,6 +83,47 @@ public class SetupService {
                 SETUP_COMPLETED_KEY,
                 "true",
                 "Indicates if initial setup has been completed"));
+    }
+
+    /**
+     * Custom secure password hashing that supports unlimited length
+     * Uses PBKDF2 with SHA-512 instead of BCrypt to avoid 72-byte limitation
+     */
+    private String hashPasswordSecurely(String password, String salt) {
+        try {
+            // Use PBKDF2 with SHA-512 - supports unlimited password length
+            javax.crypto.spec.PBEKeySpec spec = new javax.crypto.spec.PBEKeySpec(
+                    password.toCharArray(),
+                    salt.getBytes(StandardCharsets.UTF_8),
+                    100000, // iterations
+                    512); // key length in bits
+
+            javax.crypto.SecretKeyFactory factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512");
+            byte[] hash = factory.generateSecret(spec).getEncoded();
+
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (Exception e) {
+            throw new RuntimeException("Error hashing password", e);
+        }
+    }
+
+    /**
+     * Verify password against stored hash using the same secure method
+     */
+    public boolean verifyMasterPassword(String password) {
+        var saltConfig = systemConfigRepository.findByConfigKey(MASTER_SALT_KEY);
+        var passwordConfig = systemConfigRepository.findByConfigKey(MASTER_PASSWORD_KEY);
+
+        if (saltConfig.isEmpty() || passwordConfig.isEmpty()) {
+            return false;
+        }
+
+        String salt = saltConfig.get().getConfigValue();
+        String storedHash = passwordConfig.get().getConfigValue();
+
+        // Hash the provided password with the same method and compare
+        String hashedPassword = hashPasswordSecurely(password, salt);
+        return hashedPassword.equals(storedHash);
     }
 
     /**

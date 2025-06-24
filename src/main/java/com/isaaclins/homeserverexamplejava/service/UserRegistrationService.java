@@ -4,7 +4,6 @@ import com.isaaclins.homeserverexamplejava.dto.UserRegistrationRequest;
 import com.isaaclins.homeserverexamplejava.entity.UserEntity;
 import com.isaaclins.homeserverexamplejava.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +17,7 @@ public class UserRegistrationService {
     private SetupService setupService;
 
     @Autowired
-    private PasswordEncoder passwordEncoder;
+    private PasswordHashingService passwordHashingService;
 
     /**
      * Register a new user with master password verification
@@ -49,7 +48,9 @@ public class UserRegistrationService {
         UserEntity user = new UserEntity();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        // Use enhanced password hashing that supports unlimited length
+        user.setPassword(passwordHashingService.hashPassword(request.getPassword()));
 
         // Set role based on request, default to USER
         try {

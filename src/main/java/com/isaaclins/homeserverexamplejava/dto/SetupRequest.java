@@ -36,4 +36,9 @@ public class SetupRequest {
     public boolean isMasterPasswordMatching() {
         return masterPassword != null && masterPassword.equals(masterPasswordConfirmation);
     }
+
+    // Additional validation to ensure password can be processed
+    public boolean isPasswordLengthValid() {
+        return masterPassword == null || masterPassword.length() <= 1000; // Reasonable limit
+    }
 }

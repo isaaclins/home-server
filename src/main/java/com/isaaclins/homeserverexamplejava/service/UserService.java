@@ -7,7 +7,6 @@ import com.isaaclins.homeserverexamplejava.repository.UserRepository;
 import com.isaaclins.homeserverexamplejava.security.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.security.MessageDigest;
@@ -20,7 +19,7 @@ import java.util.Optional;
 public class UserService {
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final PasswordHashingService passwordHashingService;
     private final JwtUtils jwtUtils;
 
     public LoginResponse authenticate(LoginRequest loginRequest) {
@@ -34,8 +33,7 @@ public class UserService {
 
             UserEntity user = userOpt.get();
 
-            // Check password (supports both SHA-256 for existing users and BCrypt for new
-            // ones)
+            // Check password with multiple fallback methods for backward compatibility
             if (!isPasswordValid(loginRequest.getPassword(), user.getPassword())) {
                 return new LoginResponse(false, "Invalid username or password");
             }
@@ -55,16 +53,16 @@ public class UserService {
     }
 
     private boolean isPasswordValid(String plainPassword, String hashedPassword) {
-        // First try BCrypt (for new users)
+        // First try the new SHA-512 + BCrypt method (for unlimited length passwords)
         try {
-            if (passwordEncoder.matches(plainPassword, hashedPassword)) {
+            if (passwordHashingService.verifyPassword(plainPassword, hashedPassword)) {
                 return true;
             }
         } catch (Exception e) {
-            // If BCrypt fails, try SHA-256 (for compatibility with existing users)
+            log.debug("New password hashing verification failed, trying fallback methods");
         }
 
-        // Try SHA-256 for backward compatibility
+        // Fallback: Try SHA-256 (for legacy compatibility)
         try {
             String sha256Hash = sha256(plainPassword);
             return sha256Hash.equals(hashedPassword);
@@ -97,7 +95,9 @@ public class UserService {
         UserEntity user = new UserEntity();
         user.setUsername(username);
         user.setEmail(email);
-        user.setPassword(passwordEncoder.encode(password)); // Use BCrypt for new users
+
+        // Use new enhanced password hashing for unlimited length support
+        user.setPassword(passwordHashingService.hashPassword(password));
         user.setRole(role);
         user.setEnabled(true);
 

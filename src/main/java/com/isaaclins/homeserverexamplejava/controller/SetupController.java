@@ -37,7 +37,7 @@ public class SetupController {
      * Process the master password setup
      */
     @PostMapping
-    public String processSetup(@Valid @ModelAttribute SetupRequest setupRequest,
+    public String processSetup(@ModelAttribute SetupRequest setupRequest,
             BindingResult bindingResult,
             Model model,
             RedirectAttributes redirectAttributes) {
@@ -47,7 +47,21 @@ public class SetupController {
             return "redirect:/register";
         }
 
-        // Validate master password
+        // Manual validation to completely bypass any automatic Bean validation
+        if (setupRequest.getMasterPassword() == null || setupRequest.getMasterPassword().trim().isEmpty()) {
+            bindingResult.rejectValue("masterPassword", "error.password.required", "Master password is required");
+        } else if (setupRequest.getMasterPassword().length() < 8) {
+            bindingResult.rejectValue("masterPassword", "error.password.length",
+                    "Master password must be at least 8 characters");
+        }
+
+        if (setupRequest.getMasterPasswordConfirmation() == null
+                || setupRequest.getMasterPasswordConfirmation().trim().isEmpty()) {
+            bindingResult.rejectValue("masterPasswordConfirmation", "error.password.confirmation.required",
+                    "Master password confirmation is required");
+        }
+
+        // Validate master password match
         if (!setupRequest.isMasterPasswordMatching()) {
             bindingResult.rejectValue("masterPasswordConfirmation", "error.password.mismatch",
                     "Passwords do not match");
