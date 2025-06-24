@@ -208,3 +208,55 @@ The first public release focuses on two pillars:
 - [ ] **Backup Integration**: Cloud backup providers (S3, etc.)
 - [ ] **Multi-Server**: Clustering support for multiple home servers
 
+# Home Server PaaS – Quick Start (Phase 0)
+
+This guide shows how to spin up the _Phase 0_ skeleton: MySQL, Ollama, and a Spring Boot **gateway-service** that responds on `/health`.
+
+## Prerequisites
+
+1. **Docker ≥ 24** and **Docker Compose v2**
+2. (Optional) **NVIDIA GPU drivers + nvidia-docker** if you want Ollama to use the RTX 3060 Ti.
+
+## Folder Layout (so far)
+
+```
+backend/
+  gateway-service/
+    ├── Dockerfile
+    ├── pom.xml
+    └── src/main/java/com/example/gateway/GatewayApplication.java
+infra/
+  docker-compose.yml
+README.md
+```
+
+## Running Locally
+
+```bash
+# from repository root
+cd infra
+
+docker compose up -d --build
+```
+
+Containers created:
+
+- `mysql` → MySQL 8.1 on `localhost:3306` (root/root)
+- `ollama` → Ollama on `localhost:11434` (no models yet)
+- `gateway-service` → Spring Boot app on `localhost:8080`
+
+### Verify
+
+```bash
+curl http://localhost:8080/health  # returns "OK"
+```
+
+### Stopping
+
+```bash
+docker compose down -v  # removes containers + volumes
+```
+
+## Next Steps
+
+Proceed to **Phase 1** in [roadmap.md](./roadmap.md) to implement Authentication & User Management.
