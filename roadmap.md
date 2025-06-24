@@ -63,11 +63,11 @@
 
 ## Phase 2 – Admin User Management UI (1 day)
 
-| Task                      | Details                                         | Status |
-| ------------------------- | ----------------------------------------------- | ------ |
-| ⬜️ List users            | `/api/users` (admin only) → table view.         | ⬜️    |
-| ⬜️ Create user modal     | Calls `POST /api/users` (sets `mustChangePwd`). | ⬜️    |
-| ⬜️ Disable / enable user | Patch endpoint + toggle switch in UI.           | ⬜️    |
+| Task                     | Details                                         | Status |
+| ------------------------ | ----------------------------------------------- | ------ |
+| ✅ List users            | `/api/users` (admin only) → table view.         | ✅     |
+| ✅ Create user modal     | Calls `POST /api/users` (sets `mustChangePwd`). | ✅     |
+| ✅ Disable / enable user | Patch endpoint + toggle switch in UI.           | ✅     |
 
 **Exit Criteria**
 • Admin can CRUD users from web UI.  

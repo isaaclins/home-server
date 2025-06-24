@@ -21,9 +21,6 @@ public class StartupSeeder {
     @Bean
     CommandLineRunner seed(UserRepository userRepo, RoleRepository roleRepo, PasswordHashingService hashingService) {
         return args -> {
-            if (userRepo.count() > 0)
-                return;
-
             Role adminRole = roleRepo.findByName("ROLE_ADMIN").orElseGet(() -> {
                 Role r = new Role();
                 r.setName("ROLE_ADMIN");
@@ -31,16 +28,20 @@ public class StartupSeeder {
             });
 
             String randomPwd = UUID.randomUUID().toString().substring(0, 12);
-            User admin = new User();
-            admin.setUsername("admin");
+
+            User admin = userRepo.findByUsername("admin").orElse(null);
+            if (admin == null) {
+                admin = new User();
+                admin.setUsername("admin");
+                admin.setEnabled(true);
+            }
             admin.setPasswordHash(hashingService.hashPassword(randomPwd));
             admin.setMustChangePwd(true);
-            admin.setEnabled(true);
             admin.setRoles(Set.of(adminRole));
             userRepo.save(admin);
 
             log.info("*********************************");
-            log.info(" Super-admin created");
+            log.info(" Super-admin login refreshed");
             log.info(" Username: admin");
             log.info(" Temporary Password: {}", randomPwd);
             log.info("*********************************");
