@@ -1,0 +1,20 @@
+{
+  "name": "home-server-frontend",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000"
+  },
+  "dependencies": {
+    "next": "14.2.3",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5",
+    "@types/react": "18.2.43",
+    "@types/node": "20.12.7"
+  }
+} 

@@ -48,12 +48,12 @@
 
 ### 1.2 Frontend
 
-| Task                     | Details                                                               | Status |
-| ------------------------ | --------------------------------------------------------------------- | ------ |
-| ⬜️ Bootstrap project    | Next.js (TypeScript) in `frontend/`. Integrate shadcn/ui if feasible. | ⬜️    |
-| ⬜️ Login page           | Username, password → calls `/login`. Store JWT in `localStorage`.     | ⬜️    |
-| ⬜️ Password-change page | Shown if API flag `mustChangePwd=true`.                               | ⬜️    |
-| ⬜️ Auth guard HOC       | Redirect unauthenticated users to `/login`.                           | ⬜️    |
+| Task                    | Details                                                               | Status |
+| ----------------------- | --------------------------------------------------------------------- | ------ |
+| ✅ Bootstrap project    | Next.js (TypeScript) in `frontend/`. Integrate shadcn/ui if feasible. | ✅     |
+| ✅ Login page           | Username, password → calls `/login`. Store JWT in `localStorage`.     | ✅     |
+| ✅ Password-change page | Shown if API flag `mustChangePwd=true`.                               | ✅     |
+| ✅ Auth guard HOC       | Redirect unauthenticated users to `/login`.                           | ✅     |
 
 **Exit Criteria**
 • Admin can log in, create a new user (CLI for now), user forced to change password on first login.  
