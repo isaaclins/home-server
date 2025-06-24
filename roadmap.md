@@ -79,13 +79,13 @@
 
 ### 3.1 Backend – `chat-service`
 
-| Task                 | Details                                                           | Status |
-| -------------------- | ----------------------------------------------------------------- | ------ |
-| ⬜️ Module setup     | Spring Boot module under `backend/chat-service`.                  | ⬜️    |
-| ⬜️ Model list proxy | `GET /api/ollama/models` → Ollama `/api/tags`.                    | ⬜️    |
-| ⬜️ Model pull       | `POST /api/ollama/models/pull` (admin only) → Ollama `/api/pull`. | ⬜️    |
-| ⬜️ Chat endpoint    | `POST /api/ollama/chat` streams from Ollama `/api/chat`.          | ⬜️    |
-| ⬜️ Persistence      | Tables `chat_session`, `chat_message` (user-scoped).              | ⬜️    |
+| Task                | Details                                                           | Status |
+| ------------------- | ----------------------------------------------------------------- | ------ |
+| ✅ Module setup     | Spring Boot module under `backend/chat-service`.                  | ✅     |
+| ✅ Model list proxy | `GET /api/ollama/models` → Ollama `/api/tags`.                    | ✅     |
+| ✅ Model pull       | `POST /api/ollama/models/pull` (admin only) → Ollama `/api/pull`. | ✅     |
+| 🔄 Chat endpoint    | `POST /api/ollama/chat` streams from Ollama `/api/chat`.          | 🔄     |
+| ⬜️ Persistence     | Tables `chat_session`, `chat_message` (user-scoped).              | ⬜️    |
 
 ### 3.2 Frontend
 
