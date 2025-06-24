@@ -165,7 +165,7 @@ The first public release focuses on two pillars:
 - [ ] JWT token-based authentication with organization scoping
 - [ ] Role-based authorization across multiple levels
 - [ ] Protected admin routes with middleware
-- [ ] Secure password hashing with salt
+- [ ] Secure password hashing with salt and pepper
 - [ ] API rate limiting and abuse prevention
 
 ### **Container Security**
