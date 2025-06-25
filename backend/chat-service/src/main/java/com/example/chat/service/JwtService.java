@@ -10,7 +10,8 @@ import java.util.Date;
 
 @Service
 public class JwtService {
-    private final Key key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+    private static final String SECRET = "home-server-demo-secret-key-0123456789ABCDE";
+    private final Key key = Keys.hmacShaKeyFor(SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     private static final long EXPIRATION_MS = 1000 * 60 * 60;
 
     public String generateToken(String username) {

@@ -13,10 +13,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
 
     public JwtAuthFilter(JwtService jwtService) {
         this.jwtService = jwtService;
@@ -25,8 +28,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/health") || path.startsWith("/api/ollama/models")
-                || path.startsWith("/api/ollama/chat");
+        String method = request.getMethod();
+        return path.startsWith("/health") ||
+                (path.equals("/api/ollama/models") && "GET".equals(method)) ||
+                path.startsWith("/api/ollama/chat");
     }
 
     @Override
@@ -45,9 +50,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
             return;
         }
+        List<SimpleGrantedAuthority> authorities = username.equals("admin")
+                ? List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                : List.of(new SimpleGrantedAuthority("ROLE_USER"));
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(username, null,
-                        List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+                new UsernamePasswordAuthenticationToken(username, null, authorities));
+        log.info("JWT subject={}, path={}", username, request.getRequestURI());
+        log.info("Authorities set: {}", authorities);
         filterChain.doFilter(request, response);
     }
 }

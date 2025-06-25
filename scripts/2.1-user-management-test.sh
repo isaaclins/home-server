@@ -33,22 +33,28 @@ fi
 
 # login
 echo "[2/7] Logging in as admin ..."
-LOGIN_RESP=$(curl -s -X POST "${API_BASE}/api/auth/login" \
-  -H 'Content-Type: application/json' \
-  -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PWD}\"}")
+LOGIN_STATUS=$(curl -s -w "%{http_code}" -o /tmp/um_login.out -X POST "${API_BASE}/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PWD}\"}")
+if [[ "$LOGIN_STATUS" != "200" ]]; then
+  echo "Login failed ($LOGIN_STATUS) – attempting auth-service restart to refresh password";
+  docker restart auth-service >/dev/null; sleep 5;
+  ADMIN_PWD=$(docker logs auth-service 2>&1 | grep -E "Temporary Password:" | tail -1 | awk '{print $NF}')
+  LOGIN_STATUS=$(curl -s -w "%{http_code}" -o /tmp/um_login.out -X POST "${API_BASE}/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PWD}\"}")
+  if [[ "$LOGIN_STATUS" != "200" ]]; then echo "Second login attempt failed $LOGIN_STATUS"; cat /tmp/um_login.out; exit 1; fi
+fi
+LOGIN_RESP=$(cat /tmp/um_login.out)
 TOKEN=$(echo "$LOGIN_RESP" | jq -r '.accessToken')
 MUST_CHANGE=$(echo "$LOGIN_RESP" | jq -r '.mustChangePwd')
-if [[ "$TOKEN" == "null" || -z "$TOKEN" ]]; then
-  echo "Failed to obtain admin token"; exit 1;
-fi
+if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then echo "Failed to obtain admin token"; exit 1; fi
 
-# if password change required, perform it
+# handle password change
 if [[ "$MUST_CHANGE" == "true" ]]; then
   echo "[3/7] Changing admin temporary password ..."
   NEW_ADMIN_PWD="Admin$(date +%s)Pwd"
-  curl -s -X POST "${API_BASE}/api/auth/password" \
-    -H 'Content-Type: application/json' -H "Authorization: Bearer ${TOKEN}" \
-    -d "{\"oldPassword\":\"${ADMIN_PWD}\",\"newPassword\":\"${NEW_ADMIN_PWD}\"}" >/dev/null
+  curl -s -X POST "${API_BASE}/api/auth/password" -H 'Content-Type: application/json' -H "Authorization: Bearer ${TOKEN}" -d "{\"oldPassword\":\"${ADMIN_PWD}\",\"newPassword\":\"${NEW_ADMIN_PWD}\"}" >/dev/null
+  # login again with new password
+  LOGIN_STATUS=$(curl -s -w "%{http_code}" -o /tmp/um_login2.out -X POST "${API_BASE}/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"admin\",\"password\":\"${NEW_ADMIN_PWD}\"}")
+  if [[ "$LOGIN_STATUS" != "200" ]]; then echo "Login after pwd change failed $LOGIN_STATUS"; cat /tmp/um_login2.out; exit 1; fi
+  TOKEN=$(cat /tmp/um_login2.out | jq -r '.accessToken')
 fi
 
 HDR="Authorization: Bearer ${TOKEN}"

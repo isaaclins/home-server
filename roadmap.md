@@ -89,10 +89,10 @@
 
 ### 3.2 Frontend
 
-| Task                 | Details                                                                                | Status |
-| -------------------- | -------------------------------------------------------------------------------------- | ------ |
-| ⬜️ Chat UI          | Split-pane: sidebar sessions, main chat window. Streaming responses via SSE/WebSocket. | ⬜️    |
-| ⬜️ Model Manager UI | Admin-only page lists installed + remote models, buttons to pull/delete.               | ⬜️    |
+| Task                | Details                                                                                | Status |
+| ------------------- | -------------------------------------------------------------------------------------- | ------ |
+| ✅ Chat UI          | Split-pane: sidebar sessions, main chat window. Streaming responses via SSE/WebSocket. | ✅     |
+| ✅ Model Manager UI | Admin-only page lists installed + remote models, buttons to pull/delete.               | ✅     |
 
 **Exit Criteria**
 • Users can start chat sessions, messages persist.  
@@ -102,11 +102,11 @@
 
 ## Phase 4 – Resource Quota Placeholders (½ day)
 
-| Task              | Details                                                                  | Status |
-| ----------------- | ------------------------------------------------------------------------ | ------ |
-| ⬜️ DB design     | `usage(id, userId, containers, ramMB, diskMB, bandwidthMB, ts)`          | ⬜️    |
-| ⬜️ Middleware    | After each deployment (future), update usage row. For now, mock numbers. | ⬜️    |
-| ⬜️ Admin UI stub | Simple read-only grid.                                                   | ⬜️    |
+| Task             | Details                                                                  | Status |
+| ---------------- | ------------------------------------------------------------------------ | ------ |
+| ✅ DB design     | `usage(id, userId, containers, ramMB, diskMB, bandwidthMB, ts)`          | ✅     |
+| ✅ Middleware    | After each deployment (future), update usage row. For now, mock numbers. | ✅     |
+| ✅ Admin UI stub | Simple read-only grid.                                                   | ✅     |
 
 ---
 
