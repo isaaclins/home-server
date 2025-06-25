@@ -114,8 +114,8 @@
 
 | Task                    | Details                                                                        | Status |
 | ----------------------- | ------------------------------------------------------------------------------ | ------ |
-| ⬜️ Add Traefik service | Configure routers: `api.server.local` → Spring, `app.server.local` → frontend. | ⬜️    |
-| ⬜️ Wildcard cert (dev) | Use self-signed for local; later Let's Encrypt staging.                        | ⬜️    |
+| ✅ Add Traefik service | Configure routers: `api.server.local` → Spring, `app.server.local` → frontend. | ✅    |
+| ✅ Wildcard cert (dev) | Use self-signed for local; later Let's Encrypt staging.                        | ✅    |
 
 **Exit Criteria**
 • All traffic flows through Traefik (single entrypoint).
