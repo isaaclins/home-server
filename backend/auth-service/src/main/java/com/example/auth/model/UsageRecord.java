@@ -8,7 +8,7 @@ import lombok.Setter;
 import java.time.Instant;
 
 @Entity
-@Table(name = "usage")
+@Table(name = "usage_record")
 @Getter
 @Setter
 @NoArgsConstructor
