@@ -1,20 +1,51 @@
 {
-  "name": "home-server-frontend",
-  "version": "0.0.1",
+  "name": "frontend",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev --turbopack",
     "build": "next build",
-    "start": "next start -p 3000"
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "14.2.3",
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "@hookform/resolvers": "^5.1.1",
+    "@radix-ui/react-avatar": "^1.1.10",
+    "@radix-ui/react-dialog": "^1.1.14",
+    "@radix-ui/react-dropdown-menu": "^2.1.15",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-separator": "^1.1.7",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@stomp/stompjs": "^7.1.1",
+    "@types/recharts": "^1.8.29",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.523.0",
+    "next": "15.3.4",
+    "next-themes": "^0.4.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.58.1",
+    "recharts": "^3.0.0",
+    "sockjs-client": "^1.6.1",
+    "sonner": "^2.0.5",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
-    "typescript": "5.4.5",
-    "@types/react": "18.2.43",
-    "@types/node": "20.12.7"
+    "@eslint/eslintrc": "^3",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/sockjs-client": "^1.5.4",
+    "autoprefixer": "^10",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.4",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.0",
+    "tw-animate-css": "^1.3.4",
+    "typescript": "^5"
   }
-} 
+}

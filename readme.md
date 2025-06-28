@@ -1,262 +1,307 @@
-# Home Server Project - Self-Hosted PaaS Platform with AI Integration
+# Home Server - Developer Documentation
 
-## Project Purpose
+> **Comprehensive developer guide for the Home Server project** - A full-stack application with Spring Boot backend, Next.js frontend, and MySQL database, all containerized with Docker.
 
-This is a **comprehensive self-hosted Platform-as-a-Service (PaaS) solution** designed for personal use, teams, and small organizations. It provides a unified dashboard for deploying, managing, and monitoring containerized applications with integrated AI capabilities. The platform emphasizes organizational multi-tenancy, resource management, external accessibility, and ease of deployment.
+## 🏗️ Architecture Overview
 
-## Host Environment & Deployment Target
+This project implements a modern, containerized full-stack application with the following components:
 
-- **Hardware**: 32 GB DDR5 RAM, NVIDIA RTX 3060 Ti GPU, AMD Ryzen 7 7800X3D CPU
-- **Operating System**: Any lightweight Unix-like server distribution (e.g., Ubuntu Server 22.04, Debian 12).
-- **Domain Template**: Designed to run under a configurable sub-domain (default example: `server.isaaclins.com`).
+### **Backend (Spring Boot)**
 
-## Minimum Viable Product (MVP)
+- **Framework**: Spring Boot 3.2.4 with Java 17
+- **Database**: JPA/Hibernate with MySQL 8.0 (H2 for testing)
+- **Security**: JWT authentication ready (configured but not fully implemented)
+- **Monitoring**: Spring Boot Actuator with health endpoints
+- **API**: RESTful endpoints with CRUD operations for User management
 
-The first public release focuses on two pillars:
+### **Frontend (Next.js)**
 
-1. **User Management**  
-   • Admin-only user provisioning.  
-   • Mandatory password change on first login.
-2. **Ollama Chat Interface**  
-   • GPU-accelerated inference (leverages the RTX 3060 Ti).  
-   • Ships with _no_ default models; admin can pull models via a built-in Model Manager UI.
+- **Framework**: Next.js 15.3.4 with React 19
+- **Language**: TypeScript with strict type checking
+- **Styling**: Tailwind CSS with custom component library
+- **UI Components**: Lucide React icons, Class Variance Authority for component variants
+- **Development**: Turbopack for fast development builds
 
-## Architecture Overview
+### **Database & Infrastructure**
 
-### **Core Platform Features**
+- **Database**: MySQL 8.0 with automated schema initialization
+- **Containerization**: Docker Compose orchestration
+- **Networking**: Custom bridge network for service communication
+- **Volumes**: Persistent MySQL data storage
 
-- [ ] **PaaS Deployment Engine** - Deploy any Dockerized application with automatic URL generation
-- [ ] **Organizational Multi-Tenancy** - Role-based access control with resource quotas
-- [ ] **Ollama AI Integration** - Local AI model hosting and chat interface for content generation
-- [ ] **Gitea Integration** - Self-hosted Git repository management
-- [ ] **Web Terminal** - Browser-based SSH/terminal access (admin only)
-- [ ] **System Monitoring** - Real-time server resource monitoring and quota management
-- [ ] **External Domain Access** - Automatic SSL certificates and subdomain management
-
-## Key Features
-
-### **1. Platform-as-a-Service Core**
-
-- [ ] **Dockerfile Upload & Deployment**: Users upload Dockerfiles and get automatic service deployment
-- [ ] **Automatic URL Generation**: Each service gets a subdomain (service-name.yourdomain.com)
-- [ ] **Service Management**: Start, stop, restart, and delete deployed services
-- [ ] **Application Types Supported**:
-  - Web applications (Node.js, Python, PHP, etc.)
-  - Game servers (Minecraft, Terraria, etc.)
-  - Databases (PostgreSQL, Redis, etc.)
-  - Development tools and CI/CD runners
-  - Any containerized application
-- [ ] **Load Balancing**: Automatic scaling and load distribution for high-traffic services
-- [ ] **Service Discovery**: Internal service-to-service communication
-
-### **2. Organizational Multi-Tenancy & Resource Management**
-
-- [ ] **Organization Structure**: Account-based tenancy with team/organization groupings
-- [ ] **Role-Based Access Control**:
-  - **Super Admin**: Platform management, organization creation
-  - **Org Admin**: Organization management, user provisioning
-  - **Developer**: Service deployment and management
-  - **Viewer**: Read-only access to organization services
-- [ ] **Resource Quotas per Account**:
-  - Maximum concurrent containers: **2** running containers per user (12 total platform limit)
-  - RAM allocation limits: **4 GB** per user (24 GB platform limit)
-  - Disk storage limits: **10 GB** per user (80 GB platform limit)
-  - Network bandwidth limits: soft cap **200 GB/month** per user
-- [ ] **Usage Monitoring**: Real-time tracking of resource consumption per user/organization
-
-### **3. Authentication & Authorization System**
-
-- [ ] JWT-based authentication with secure token management
-- [ ] Organization-scoped role assignments
-- [ ] Initial super admin setup during first run
-- [ ] Forced password change on first login for newly-provisioned users
-- [ ] Session management with automatic redirects
-- [ ] API key management for programmatic access
-
-### **4. AI Chat Interface (Ollama Integration)**
-
-- [ ] **Content Generation**: AI-powered writing assistance and content creation
-- [ ] **Personal Assistant**: Task management, code help, and general assistance
-- [ ] **Interactive Chat Interface**: Real-time streaming chat with various AI models
-- [ ] **Model Manager UI**: Admin can pull, install, and manage AI models (no models ship by default)
-- [ ] **GPU Acceleration**: Utilises RTX 3060 Ti if available, with CPU fallback
-- [ ] **Chat History**: Persistent conversation history per user
-- [ ] **Organization-wide AI**: Shared AI resources within organizations
-
-### **5. External Access & Domain Management**
-
-- [ ] **Reverse Proxy (Traefik)**: Automatic routing and load balancing
-- [ ] **Automatic SSL**: Let's Encrypt integration with wildcard certificate support
-- [ ] **Subdomain Management**: Automatic subdomain generation for deployed services
-- [ ] **Custom Domain Support**: Users can configure custom domains for their services
-- [ ] **Dynamic DNS Integration**: Automatic DNS updates for changing IPs
-
-### **6. Git Repository Management (Gitea)**
-
-- [ ] **Self-hosted Git**: Complete Git hosting solution with web interface
-- [ ] **Organization Repositories**: Team-based repository management
-- [ ] **CI/CD Integration**: Automatic deployment from Git repositories
-- [ ] **Service Integration**: Deploy directly from Git repositories to PaaS
-
-### **7. System Administration**
-
-- [ ] **Web Terminal**: Full terminal access through the browser (admin only)
-- [ ] **System Statistics**: Real-time monitoring of CPU, memory, network, and storage
-- [ ] **Resource Charts**: Visual representation of system performance and quota usage
-- [ ] **Activity & Request Logs**: Log every HTTP request (user, time, route); viewable only by admins
-- [ ] **User Management**: Admin interface for managing organizations and users
-- [ ] **Backup Management**: Automated backup and restore for user data and services
-
-## Application Structure
-
-### **Frontend Pages**
-
-- [ ] **`/login`** - Authentication page
-- [ ] **`/dashboard`** - Main dashboard showing deployed services and resource usage
-- [ ] **`/deploy`** - Service deployment interface (Dockerfile upload)
-- [ ] **`/services`** - Service management and monitoring
-- [ ] **`/ollama-chat`** - AI chat interface
-- [ ] **`/repositories`** - Git repository browser and management
-- [ ] **`/admin/terminal`** - Web-based terminal (admin only)
-- [ ] **`/admin/users`** - User and organization management (admin only)
-- [ ] **`/admin/system`** - System monitoring and configuration (admin only)
-
-### **Backend API Endpoints**
-
-- [ ] **Authentication**: `/api/auth/*` - Login, token management, user sessions
-- [ ] **PaaS Management**: `/api/deploy/*` - Service deployment, management, monitoring
-- [ ] **Resource Management**: `/api/resources/*` - Quota management, usage tracking
-- [ ] **Ollama Integration**: `/api/ollama/*` - AI model management and chat
-- [ ] **Gitea Management**: `/api/git/*` - Repository management and CI/CD
-- [ ] **System Monitoring**: `/api/system/*` - Real-time metrics and administration
-- [ ] **Organization Management**: `/api/orgs/*` - Multi-tenancy and role management
-
-### **Key Components**
-
-- [ ] **DeploymentEngine**: Docker container orchestration and management
-- [ ] **ResourceManager**: Quota enforcement and usage tracking
-- [ ] **ProxyManager**: Automatic subdomain and SSL certificate management
-- [ ] **DashboardShell**: Main layout with organization-aware navigation
-- [ ] **ServiceMonitor**: Real-time service health and performance monitoring
-- [ ] **TerminalComponent**: Web terminal using xterm.js
-
-## Development Workflow
-
-### **Initial Setup Process**
-
-- [ ] **Database Initialization**: MySQL database with multi-tenant schema
-- [ ] **Super Admin Creation**: Initial platform administrator account
-- [ ] **Domain Configuration**: SSL certificate setup and proxy configuration
-- [ ] **Service Startup**: Ollama, Gitea, Traefik, and main application servers
-- [ ] **Default Quotas**: Configuration of default resource limits
-
-### **Data Persistence Strategy**
-
-- [ ] **MySQL Database**: User accounts, organizations, service metadata, and configurations
-- [ ] **Container Storage**: Persistent volumes for deployed services
-- [ ] **Gitea Data**: Separate directory for repository storage
-- [ ] **Ollama Models**: Model storage and configuration persistence
-- [ ] **Backup Strategy**: Automated daily backups of all user data and configurations
-
-## Security Features
-
-### **Access Control**
-
-- [ ] JWT token-based authentication with organization scoping
-- [ ] Role-based authorization across multiple levels
-- [ ] Protected admin routes with middleware
-- [ ] Secure password hashing with salt and pepper
-- [ ] API rate limiting and abuse prevention
-
-### **Container Security**
-
-- [ ] Isolated container environments per organization
-- [ ] Resource limits enforced at container level
-- [ ] Network segmentation between organizations
-- [ ] Automated security scanning of deployed containers
-
-### **External Access Security**
-
-- [ ] Automatic SSL/TLS encryption for all services
-- [ ] DDoS protection and rate limiting
-- [ ] Firewall integration and port management
-- [ ] Audit logging for all administrative actions
-
-## Technology Stack
-
-### **Backend Infrastructure**
-
-- [ ] **Application**: Java Spring Boot
-- [ ] **Database**: MySQL with connection pooling
-- [ ] **Container Orchestration**: Docker Engine with custom management layer
-- [ ] **Reverse Proxy**: Traefik with automatic SSL
-- [ ] **AI Platform**: Ollama for local AI model hosting
-
-### **Scalability Considerations**
-
-- [ ] **Database**: MySQL with read replicas for scaling
-- [ ] **Container Management**: Resource pooling and intelligent scheduling
-- [ ] **Load Balancing**: Automatic distribution across available resources
-- [ ] **Caching**: Redis for session management and performance optimization
-
-## Future Enhancements
-
-- [ ] **Marketplace**: Pre-built application templates (WordPress, Minecraft, etc.)
-- [ ] **Advanced CI/CD**: GitOps workflow integration
-- [ ] **Monitoring Dashboard**: Grafana integration for advanced metrics
-- [ ] **API Gateway**: Advanced API management and documentation
-- [ ] **Backup Integration**: Cloud backup providers (S3, etc.)
-- [ ] **Multi-Server**: Clustering support for multiple home servers
-
-# Home Server PaaS – Quick Start (Phase 0)
-
-This guide shows how to spin up the _Phase 0_ skeleton: MySQL, Ollama, and a Spring Boot **gateway-service** that responds on `/health`.
-
-## Prerequisites
-
-1. **Docker ≥ 24** and **Docker Compose v2**
-2. (Optional) **NVIDIA GPU drivers + nvidia-docker** if you want Ollama to use the RTX 3060 Ti.
-
-## Folder Layout (so far)
+## 📋 Project Structure
 
 ```
-backend/
-  gateway-service/
-    ├── Dockerfile
-    ├── pom.xml
-    └── src/main/java/com/example/gateway/GatewayApplication.java
-infra/
-  docker-compose.yml
-README.md
+home-server/
+├── backend/                    # Spring Boot REST API
+│   ├── src/main/java/com/isaaclins/homeserver/
+│   │   ├── BackendApplication.java         # Main Spring Boot application
+│   │   ├── controller/
+│   │   │   ├── HealthController.java       # Health check endpoints
+│   │   │   └── UserController.java         # User CRUD operations
+│   │   └── entity/
+│   │       └── User.java                   # JPA entity with Lombok
+│   ├── pom.xml                            # Maven dependencies & build config
+│   └── Dockerfile                         # Backend container configuration
+├── frontend/                   # Next.js TypeScript application
+│   ├── app/                               # Next.js 13+ app directory
+│   ├── components.json                    # Shadcn/ui configuration
+│   ├── package.json                      # Node dependencies & scripts
+│   └── Dockerfile                         # Frontend container configuration
+├── db/
+│   └── init.sql                          # Database schema initialization
+├── tests/                     # Test automation scripts
+│   ├── 00-fail.sh                       # Intentional failure test
+│   └── 01-succeed.sh                    # Success test case
+├── compose.yml                # Docker Compose orchestration
+├── start.sh                   # Production startup script
+├── setup-secrets.sh           # Secure configuration generator
+└── run-test.sh               # Automated testing framework
 ```
 
-## Running Locally
+## 🛠️ Technical Implementation Details
+
+### **Backend Architecture**
+
+#### **Dependencies & Frameworks**
+
+- **Spring Boot Starter Web**: RESTful web services
+- **Spring Boot Starter Data JPA**: Database abstraction layer
+- **Spring Boot Starter Actuator**: Production monitoring
+- **MySQL Connector**: Production database driver
+- **H2 Database**: In-memory testing database
+- **Lombok**: Boilerplate code reduction
+
+#### **API Endpoints**
+
+```
+GET    /users         # List all users
+GET    /users/{id}    # Get user by ID
+POST   /users         # Create new user
+PUT    /users/{id}    # Update existing user
+DELETE /users/{id}    # Delete user
+
+GET    /actuator/health    # Health check endpoint
+```
+
+#### **Data Model**
+
+```java
+@Entity User {
+    Long id                    // Auto-generated primary key
+    String username           // Unique username
+    String email             // User email address
+    String hashedPassword    // Encrypted password
+    LocalDateTime createdAt  // Auto-set creation timestamp
+}
+```
+
+### **Frontend Architecture**
+
+#### **Tech Stack**
+
+- **Next.js 15.3.4**: React framework with app directory
+- **TypeScript**: Static type checking
+- **Tailwind CSS**: Utility-first CSS framework
+- **Component Library**: Custom components with CVA for variants
+
+#### **Development Features**
+
+- **Turbopack**: Lightning-fast development builds
+- **ESLint**: Code quality enforcement
+- **Hot Reloading**: Instant development feedback
+
+### **Infrastructure & DevOps**
+
+#### **Docker Composition**
+
+- **Multi-stage builds**: Optimized container images
+- **Health checks**: Automatic service health monitoring
+- **Dependency management**: Proper service startup ordering
+- **Network isolation**: Custom bridge network for security
+
+#### **Configuration Management**
+
+- **Environment-based**: Separate configs for development/production
+- **Secret management**: Automated generation with `setup-secrets.sh`
+- **Flexible deployment**: Easy port and service customization
+
+## 🚀 Development Workflow
+
+### **Initial Setup**
+
+1. **Generate secure configuration**:
+
+   ```bash
+   ./setup-secrets.sh
+   ```
+
+   This creates a `.secrets` file with:
+
+   - Randomly generated MySQL passwords
+   - JWT secret key (64-character base64)
+   - All necessary environment variables
+
+2. **Start the entire stack**:
+   ```bash
+   ./start.sh
+   ```
+   This script:
+   - Validates `.secrets` file existence
+   - Converts secrets to Docker Compose format
+   - Builds and starts all containers
+   - Provides status overview and useful commands
+
+### **Development Environments**
+
+#### **Containerized Development** (Recommended)
 
 ```bash
-# from repository root
-cd infra
+# Start all services
+./start.sh
 
-docker compose up -d --build
+# View logs
+docker compose logs -f
+
+# Restart specific service
+docker compose restart backend
+
+# Stop everything
+docker compose down
 ```
 
-Containers created:
-
-- `mysql` → MySQL 8.1 on `localhost:3306` (root/root)
-- `ollama` → Ollama on `localhost:11434` (no models yet)
-- `gateway-service` → Spring Boot app on `localhost:8080`
-
-### Verify
+#### **Local Development**
 
 ```bash
-curl http://localhost:8080/health  # returns "OK"
+# Backend (requires Java 17 & Maven)
+cd backend
+mvn spring-boot:run
+
+# Frontend (requires Node.js)
+cd frontend
+npm run dev
 ```
 
-### Stopping
+### **Testing Framework**
+
+#### **Automated Testing**
 
 ```bash
-docker compose down -v  # removes containers + volumes
+./run-test.sh
 ```
 
-## Next Steps
+**Features:**
 
-Proceed to **Phase 1** in [roadmap.md](./roadmap.md) to implement Authentication & User Management.
+- **Server lifecycle management**: Automatic start/stop of Spring Boot
+- **Health monitoring**: Waits for server readiness before testing
+- **Configurable behavior**:
+  - `STOP_ON_ERROR=true/false`: Continue or halt on first failure
+  - `MAX_WAIT_SECONDS`: Server startup timeout
+  - `SERVER_URL`: Custom health check endpoint
+- **Comprehensive reporting**: Pass/fail statistics with percentages
+- **Signal handling**: Graceful cleanup on interruption
+
+#### **Test Structure**
+
+- Tests located in `tests/*.sh`
+- Each test is an independent bash script
+- Exit code 0 = success, non-zero = failure
+- Example tests included (failure and success scenarios)
+
+## 🔧 Configuration Details
+
+### **Environment Variables**
+
+The `.secrets` file contains all configuration:
+
+#### **Database Configuration**
+
+```bash
+MYSQL_ROOT_PASSWORD=<generated>
+MYSQL_DATABASE=homeserver
+MYSQL_USER=homeserver_app
+MYSQL_PASSWORD=<generated>
+```
+
+#### **Backend Configuration**
+
+```bash
+BACKEND_PORT=8080
+SPRING_PROFILES_ACTIVE=docker
+DB_URL=jdbc:mysql://mysql:3306/homeserver
+JWT_SECRET=<64-char-generated>
+```
+
+#### **Frontend Configuration**
+
+```bash
+FRONTEND_PORT=3000
+NEXT_PUBLIC_API_URL=http://localhost:8080
+NODE_ENV=production
+```
+
+### **Service Endpoints**
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8080
+- **Health Check**: http://localhost:8080/actuator/health
+- **Database**: localhost:3306
+
+## 📊 Development Features
+
+### **Backend Features**
+
+- **In-memory user storage**: ConcurrentHashMap for demo purposes
+- **Sample data**: Pre-loaded test users
+- **Thread-safe operations**: Atomic ID generation
+- **Production-ready**: Easy migration to database repository
+- **Health monitoring**: Actuator endpoints for system monitoring
+
+### **Frontend Features**
+
+- **Modern React**: Latest React 19 with Next.js 15
+- **TypeScript**: Full type safety throughout the application
+- **Component library**: Reusable UI components with Tailwind CSS
+- **Development optimization**: Turbopack for faster builds
+
+### **DevOps Features**
+
+- **One-command setup**: `./setup-secrets.sh` → `./start.sh`
+- **Automated testing**: Comprehensive test runner with reporting
+- **Health monitoring**: Built-in health checks for all services
+- **Easy scaling**: Docker Compose ready for horizontal scaling
+- **Security**: Automated secret generation and proper file permissions
+
+## 🎯 Production Considerations
+
+### **Implemented**
+
+- ✅ Container orchestration with Docker Compose
+- ✅ Health checks and monitoring
+- ✅ Secure secret management
+- ✅ Database initialization and persistence
+- ✅ Environment-specific configuration
+- ✅ Automated testing framework
+
+### **Ready for Enhancement**
+
+- 🔄 Database repository pattern (currently in-memory)
+- 🔄 JWT authentication implementation (configured but not used)
+- 🔄 Frontend-backend integration
+- 🔄 API error handling and validation
+- 🔄 Production database migrations
+- 🔄 SSL/TLS configuration
+
+## 📚 Next Steps for Developers
+
+1. **Implement JPA repositories** to replace in-memory storage
+2. **Add JWT authentication** flow (backend configuration exists)
+3. **Create frontend pages** to consume backend APIs
+4. **Add input validation** and error handling
+5. **Implement database migrations** for schema versioning
+6. **Add comprehensive logging** and monitoring
+7. **Set up CI/CD pipeline** for automated deployment
+
+---
+
+**Built with ❤️ using Spring Boot, Next.js, and Docker**
