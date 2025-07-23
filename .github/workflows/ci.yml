@@ -90,8 +90,7 @@ jobs:
 
       - name: Make scripts executable
         run: |
-          chmod +x run-test.sh tests/backend/01-succeed.sh
-          chmod +x run-test-ci.sh
+          chmod +x run-test.sh tests/**/*.sh
 
       - name: Verify Environment Setup
         run: |
