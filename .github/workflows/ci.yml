@@ -103,7 +103,7 @@ jobs:
           mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 'Connection successful'" homeserver_test
 
       - name: Run Tests
-        run: ./run-test-ci.sh
+        run: ./run-test.sh
 
       - name: Publish Test Results
         uses: dorny/test-reporter@v1
