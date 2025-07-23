@@ -12,6 +12,7 @@ services:
       - "${DB_PORT}:3306"
     volumes:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db/force-init.sh:/docker-entrypoint-initdb.d/force-init.sh
       - mysql_data:/var/lib/mysql
     networks:
       - homeserver-network
@@ -19,6 +20,7 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
       retries: 10
+    command: ["bash", "/docker-entrypoint-initdb.d/force-init.sh"]
 
   # Java Backend
   backend:
