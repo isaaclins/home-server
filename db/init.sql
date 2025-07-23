@@ -1,6 +1,6 @@
-DROP DATABASE IF EXISTS homeserver_test;
-CREATE DATABASE homeserver_test;
-USE homeserver_test;
+DROP DATABASE IF EXISTS homeserver;
+CREATE DATABASE homeserver;
+USE homeserver;
 
 DROP TABLE IF EXISTS users;
 CREATE TABLE users (
