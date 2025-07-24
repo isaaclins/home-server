@@ -13,8 +13,8 @@ set -uo pipefail # DO NOT CHANGE THIS LINE
 # -----------------------------------------------------------------------------
 # UN/COMMENT THESE VARIABLES TO CHANGE THE BEHAVIOUR
 # -----------------------------------------------------------------------------
-STOP_ON_ERROR="${STOP_ON_ERROR:-false}"
-#STOP_ON_ERROR="${STOP_ON_ERROR:-true}"
+#STOP_ON_ERROR="${STOP_ON_ERROR:-false}"
+STOP_ON_ERROR="${STOP_ON_ERROR:-true}"
 
 # Resolve project root so the script can be called from anywhere
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
