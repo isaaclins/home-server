@@ -82,10 +82,6 @@ jobs:
             sleep 2
           done
 
-      - name: Initialize Database
-        run: |
-          mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} < db/init.sql
-
       - name: Make scripts executable
         run: |
           chmod +x run-test.sh tests/**/*.sh
