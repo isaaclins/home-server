@@ -16,10 +16,10 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
-          MYSQL_USER: ${{ secrets.MYSQL_USER }}
-          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
         ports:
           - 3306:3306
         # Set health checks to wait until mysql has started
@@ -31,16 +31,16 @@ jobs:
 
     env:
       # Application configuration for testing
-      SPRING_PROFILES_ACTIVE: test
-      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/${{ secrets.MYSQL_DATABASE }}
-      SPRING_DATASOURCE_USERNAME: ${{ secrets.MYSQL_USER }}
-      SPRING_DATASOURCE_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+      SPRING_PROFILES_ACTIVE: ci
+      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
       SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQL8Dialect
       SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
       SPRING_JPA_SHOW_SQL: true
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'test_jwt_secret_for_ci_must_be_at_least_256_bits_long_abcdefghijklmnopqrstuvwxyz123456' }}
+      JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION || '86400000' }}
       SERVER_PORT: 8080
 
       # Test configuration
@@ -82,10 +82,6 @@ jobs:
             sleep 2
           done
 
-      - name: Initialize Database
-        run: |
-          mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} < db/init.sql
-
       - name: Make scripts executable
         run: |
           chmod +x run-test.sh tests/**/*.sh
@@ -98,7 +94,7 @@ jobs:
           echo "Maven version:"
           mvn --version
           echo "MySQL connection test:"
-          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 'Connection successful'" ${{ secrets.MYSQL_DATABASE }}
+          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 'Connection successful'" ${{ secrets.MYSQL_DATABASE || 'homeserver' }}
 
       - name: Run Tests
         run: ./run-test.sh
