@@ -210,7 +210,10 @@ jobs:
       - name: Start frontend server
         working-directory: frontend
         run: |
-          # Start the frontend server in the background
+          # Build the application first
+          npm run build
+
+          # Start the frontend server in the background using standalone server
           npm start &
           FRONTEND_PID=$!
           echo "Frontend server started with PID: $FRONTEND_PID"
@@ -310,7 +313,7 @@ jobs:
       - name: Start frontend server
         working-directory: frontend
         run: |
-          # Start the frontend server in the background
+          # Start the frontend server in the background using standalone server
           npm start &
           FRONTEND_PID=$!
           echo "Frontend server started with PID: $FRONTEND_PID"
