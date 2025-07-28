@@ -268,7 +268,22 @@ jobs:
         working-directory: frontend
         run: |
           npm start &
-          sleep 10
+          FRONTEND_PID=$!
+          echo "Frontend server started with PID: $FRONTEND_PID"
+          
+          # Wait for frontend to be ready
+          echo "Waiting for frontend server to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend server is ready!"
+              break
+            fi
+            echo "Waiting for frontend server... ($i/30)"
+            sleep 2
+          done
+          
+          # Store PID for cleanup
+          echo $FRONTEND_PID > /tmp/frontend.pid
 
       - name: Run Lighthouse CI
         uses: treosh/lighthouse-ci-action@v11
@@ -277,3 +292,13 @@ jobs:
           uploadArtifacts: true
           temporaryPublicStorage: true
           runs: 3
+
+      - name: Stop frontend server
+        if: always()
+        run: |
+          if [[ -f /tmp/frontend.pid ]]; then
+            FRONTEND_PID=$(cat /tmp/frontend.pid)
+            echo "Stopping frontend server with PID: $FRONTEND_PID"
+            kill $FRONTEND_PID 2>/dev/null || true
+            rm -f /tmp/frontend.pid
+          fi

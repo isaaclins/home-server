@@ -2,7 +2,7 @@ module.exports = {
   ci: {
     collect: {
       url: ['http://localhost:3000'],
-      startServerCommand: 'npm start',
+      startServerCommand: 'cd frontend && npm start',
       startServerReadyPattern: 'Ready on',
       startServerReadyTimeout: 30000,
     },
