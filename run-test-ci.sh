@@ -134,7 +134,11 @@ start_frontend() {
     npm install
   fi
   
-  # Build the frontend
+  # Set backend URL environment variable for the entire frontend process
+  export BACKEND_URL="http://localhost:8080"
+  log "Using backend URL: $BACKEND_URL"
+  
+  # Build the frontend with backend URL environment variable
   log "Building frontend application..."
   npm run build
   
