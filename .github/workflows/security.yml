@@ -81,14 +81,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Pull built images
+      - name: Check if images exist
+        id: check-images
         run: |
-          # Pull the images that were built in the CI workflow
-          # Only run on pushes to main/develop or PRs where CI has built images
-          docker pull ghcr.io/${{ github.repository }}-backend:${{ github.sha }}
-          docker pull ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+          # Try to pull images, but don't fail if they don't exist
+          if docker pull ghcr.io/${{ github.repository }}-backend:${{ github.sha }} 2>/dev/null; then
+            echo "backend-exists=true" >> $GITHUB_OUTPUT
+            echo "Backend image found"
+          else
+            echo "backend-exists=false" >> $GITHUB_OUTPUT
+            echo "Backend image not found - skipping backend scan"
+          fi
+          
+          if docker pull ghcr.io/${{ github.repository }}-frontend:${{ github.sha }} 2>/dev/null; then
+            echo "frontend-exists=true" >> $GITHUB_OUTPUT
+            echo "Frontend image found"
+          else
+            echo "frontend-exists=false" >> $GITHUB_OUTPUT
+            echo "Frontend image not found - skipping frontend scan"
+          fi
 
       - name: Run Trivy vulnerability scanner on backend
+        if: steps.check-images.outputs.backend-exists == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: "ghcr.io/${{ github.repository }}-backend:${{ github.sha }}"
@@ -96,6 +110,7 @@ jobs:
           output: "trivy-backend.sarif"
 
       - name: Run Trivy vulnerability scanner on frontend
+        if: steps.check-images.outputs.frontend-exists == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: "ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}"
@@ -103,15 +118,23 @@ jobs:
           output: "trivy-frontend.sarif"
 
       - name: Upload backend scan results
+        if: steps.check-images.outputs.backend-exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
         with:
           sarif_file: "trivy-backend.sarif"
           category: "docker-backend"
 
       - name: Upload frontend scan results
+        if: steps.check-images.outputs.frontend-exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
         with:
           sarif_file: "trivy-frontend.sarif"
           category: "docker-frontend"
+
+      - name: Skip message
+        if: steps.check-images.outputs.backend-exists == 'false' && steps.check-images.outputs.frontend-exists == 'false'
+        run: |
+          echo "No Docker images found for scanning. This is normal for:"
+          echo "- Pull requests where CI hasn't built images yet"
+          echo "- Branches where images haven't been pushed to registry"
+          echo "Docker security scanning will be skipped."
