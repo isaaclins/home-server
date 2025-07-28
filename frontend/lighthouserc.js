@@ -2,9 +2,10 @@ module.exports = {
   ci: {
     collect: {
       url: ['http://localhost:3000'],
-      startServerCommand: 'cd frontend && npm start',
-      startServerReadyPattern: 'Ready on',
-      startServerReadyTimeout: 30000,
+      // Don't start server - let the CI handle it or run against static build
+      // startServerCommand: 'cd frontend && npm start',
+      // startServerReadyPattern: 'Ready on',
+      // startServerReadyTimeout: 30000,
     },
     assert: {
       assertions: {

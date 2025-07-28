@@ -241,6 +241,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests]
     if: github.event_name == 'pull_request'
+    # Run independently to avoid port conflicts
     env:
       NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
       NEXT_PUBLIC_ADMIN_SECRET: ${{ secrets.NEXT_PUBLIC_ADMIN_SECRET }}
@@ -264,9 +265,10 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Start application
+      - name: Start frontend server
         working-directory: frontend
         run: |
+          # Start the frontend server in the background
           npm start &
           FRONTEND_PID=$!
           echo "Frontend server started with PID: $FRONTEND_PID"
