@@ -145,8 +145,37 @@ jobs:
     needs: [backend-tests, frontend-tests]
     if: github.event_name == 'pull_request'
 
+    # Service containers to run with the job
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
     env:
-      NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+      # Application configuration for testing
+      SPRING_PROFILES_ACTIVE: ci
+      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQL8Dialect
+      SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
+      SPRING_JPA_SHOW_SQL: true
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'test_jwt_secret_for_ci_must_be_at_least_256_bits_long_abcdefghijklmnopqrstuvwxyz123456' }}
+      JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION || '86400000' }}
+      SERVER_PORT: 8080
+      NEXT_PUBLIC_API_URL: http://localhost:8080
       NEXT_PUBLIC_ADMIN_SECRET: ${{ secrets.NEXT_PUBLIC_ADMIN_SECRET }}
 
     steps:
@@ -168,35 +197,43 @@ jobs:
         working-directory: frontend
         run: npx playwright install
 
-      - name: Start the application stack
-        env:
-          # Set required environment variables for Docker Compose
-          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
-          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'homeserver' }}
-          MYSQL_USER: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
-          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
-          BACKEND_PORT: 8080
-          FRONTEND_PORT: 3000
-          NEXT_PUBLIC_API_URL: http://localhost:8080
-          COMPOSE_PROJECT_NAME: homeserver
-          MYSQL_CONTAINER: homeserver-mysql-ci
-          BACKEND_CONTAINER: homeserver-backend-ci
-          FRONTEND_CONTAINER: homeserver-frontend-ci
+      - name: Install MySQL Client
         run: |
-          # Start only MySQL and backend for integration tests
-          docker compose up -d mysql backend
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mysql-client
 
-          # Wait for services to be ready
+      - name: Wait for MySQL to be ready
+        run: |
           echo "Waiting for MySQL to be ready..."
-          for i in {1..60}; do
-            if docker compose exec -T mysql mysqladmin ping -h localhost --silent; then
+          for i in {1..30}; do
+            if mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1" >/dev/null 2>&1; then
               echo "MySQL is ready!"
               break
             fi
-            echo "Waiting for MySQL... ($i/60)"
+            echo "Waiting for MySQL... ($i/30)"
             sleep 2
           done
 
+      - name: Start backend container
+        run: |
+          # Start the backend container using the built image
+          docker run -d \
+            --name backend-test \
+            -p 8080:8080 \
+            -e SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE \
+            -e SPRING_DATASOURCE_URL=$SPRING_DATASOURCE_URL \
+            -e SPRING_DATASOURCE_USERNAME=$SPRING_DATASOURCE_USERNAME \
+            -e SPRING_DATASOURCE_PASSWORD=$SPRING_DATASOURCE_PASSWORD \
+            -e SPRING_DATASOURCE_DRIVER_CLASS_NAME=$SPRING_DATASOURCE_DRIVER_CLASS_NAME \
+            -e SPRING_JPA_DATABASE_PLATFORM=$SPRING_JPA_DATABASE_PLATFORM \
+            -e SPRING_JPA_HIBERNATE_DDL_AUTO=$SPRING_JPA_HIBERNATE_DDL_AUTO \
+            -e SPRING_JPA_SHOW_SQL=$SPRING_JPA_SHOW_SQL \
+            -e JWT_SECRET=$JWT_SECRET \
+            -e JWT_EXPIRATION=$JWT_EXPIRATION \
+            -e SERVER_PORT=$SERVER_PORT \
+            ghcr.io/${{ github.repository }}-backend:${{ github.sha }}
+
+          # Wait for backend to be ready
           echo "Waiting for backend to be ready..."
           for i in {1..60}; do
             if curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
@@ -270,8 +307,9 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          # Stop Docker Compose services
-          docker compose down -v
+          # Stop and remove backend container
+          docker stop backend-test 2>/dev/null || true
+          docker rm backend-test 2>/dev/null || true
 
           # Also stop any remaining frontend server
           if [[ -f /tmp/frontend.pid ]]; then
