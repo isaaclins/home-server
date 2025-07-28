@@ -169,11 +169,43 @@ jobs:
         run: npx playwright install
 
       - name: Start the application stack
+        env:
+          # Set required environment variables for Docker Compose
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
+          BACKEND_PORT: 8080
+          FRONTEND_PORT: 3000
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+          COMPOSE_PROJECT_NAME: homeserver
+          MYSQL_CONTAINER: homeserver-mysql-ci
+          BACKEND_CONTAINER: homeserver-backend-ci
+          FRONTEND_CONTAINER: homeserver-frontend-ci
         run: |
-          docker compose up -d
+          # Start only MySQL and backend for integration tests
+          docker compose up -d mysql backend
 
           # Wait for services to be ready
-          sleep 30
+          echo "Waiting for MySQL to be ready..."
+          for i in {1..60}; do
+            if docker compose exec -T mysql mysqladmin ping -h localhost --silent; then
+              echo "MySQL is ready!"
+              break
+            fi
+            echo "Waiting for MySQL... ($i/60)"
+            sleep 2
+          done
+
+          echo "Waiting for backend to be ready..."
+          for i in {1..60}; do
+            if curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              break
+            fi
+            echo "Waiting for backend... ($i/60)"
+            sleep 2
+          done
 
       - name: Start frontend server
         working-directory: frontend
@@ -182,7 +214,7 @@ jobs:
           npm start &
           FRONTEND_PID=$!
           echo "Frontend server started with PID: $FRONTEND_PID"
-          
+
           # Wait for frontend to be ready
           echo "Waiting for frontend server to be ready..."
           for i in {1..30}; do
@@ -193,7 +225,7 @@ jobs:
             echo "Waiting for frontend server... ($i/30)"
             sleep 2
           done
-          
+
           # Store PID for cleanup
           echo $FRONTEND_PID > /tmp/frontend.pid
 
@@ -234,7 +266,17 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: |
+          # Stop Docker Compose services
+          docker compose down -v
+
+          # Also stop any remaining frontend server
+          if [[ -f /tmp/frontend.pid ]]; then
+            FRONTEND_PID=$(cat /tmp/frontend.pid)
+            echo "Stopping frontend server with PID: $FRONTEND_PID"
+            kill $FRONTEND_PID 2>/dev/null || true
+            rm -f /tmp/frontend.pid
+          fi
 
   lighthouse:
     name: Lighthouse Performance Audit
@@ -272,7 +314,7 @@ jobs:
           npm start &
           FRONTEND_PID=$!
           echo "Frontend server started with PID: $FRONTEND_PID"
-          
+
           # Wait for frontend to be ready
           echo "Waiting for frontend server to be ready..."
           for i in {1..30}; do
@@ -283,7 +325,7 @@ jobs:
             echo "Waiting for frontend server... ($i/30)"
             sleep 2
           done
-          
+
           # Store PID for cleanup
           echo $FRONTEND_PID > /tmp/frontend.pid
 
