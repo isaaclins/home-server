@@ -283,7 +283,7 @@ run_tests() {
   log "TESTS PASSED: $tests_passed"
   log "TESTS FAILED: $tests_failed"
   log "TOTAL TESTS:  $total_tests"
-  log "PERCENTILE:   ${percentage}%"
+  log "PERCENTAGE:   ${percentage}%"
   log "============================================================"
   
   return $overall_rc

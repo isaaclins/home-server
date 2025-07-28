@@ -22,7 +22,6 @@
         ]]></notes>
         <gav regex="true">^org\.springframework:spring-web:.*$</gav>
         <cve>CVE-2024-38809</cve>
-        <cve>CVE-2025-41234</cve>
     </suppress>
     
     <suppress>
@@ -40,19 +39,8 @@
         These are embedded Tomcat vulnerabilities that don't affect our application directly.
         ]]></notes>
         <gav regex="true">^org\.apache\.tomcat\.embed:tomcat-embed-core:.*$</gav>
-        <cve>CVE-2024-50379</cve>
-        <cve>CVE-2024-52316</cve>
-        <cve>CVE-2024-56337</cve>
-        <cve>CVE-2025-24813</cve>
-        <cve>CVE-2025-31651</cve>
-        <cve>CVE-2025-49124</cve>
         <cve>CVE-2024-34750</cve>
         <cve>CVE-2024-38286</cve>
-        <cve>CVE-2025-31650</cve>
-        <cve>CVE-2025-48988</cve>
-        <cve>CVE-2025-49125</cve>
-        <cve>CVE-2025-46701</cve>
-        <cve>CVE-2024-54677</cve>
     </suppress>
     
 </suppressions> 
