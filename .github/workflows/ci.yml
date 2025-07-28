@@ -113,6 +113,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend image locally (for PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          # For PRs, build locally since images aren't pushed
+          docker build -t homeserver-backend:test ./backend
+
+      - name: Pull backend image (for non-PRs)
+        if: github.event_name != 'pull_request'
+        run: |
+          # Pull the built image from registry
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}
+
       - name: Install MySQL Client
         run: |
           sudo apt-get update -qq
@@ -132,7 +152,13 @@ jobs:
 
       - name: Start backend container
         run: |
-          # Start the backend container using the built image
+          # Start the backend container using the appropriate image
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            IMAGE_NAME="homeserver-backend:test"
+          else
+            IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}"
+          fi
+          
           docker run -d \
             --name backend-test \
             -p 8080:8080 \
@@ -147,7 +173,7 @@ jobs:
             -e JWT_SECRET=$JWT_SECRET \
             -e JWT_EXPIRATION=$JWT_EXPIRATION \
             -e SERVER_PORT=$SERVER_PORT \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}
+            $IMAGE_NAME
 
           # Wait for backend to be ready
           echo "Waiting for backend to be ready..."
