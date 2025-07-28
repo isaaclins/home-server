@@ -28,6 +28,7 @@ MAX_SERVER_RETRIES="${MAX_SERVER_RETRIES:-3}"
 
 # Global variables for process tracking
 BACKEND_PID=""
+FRONTEND_PID=""
 INTERRUPTED=false
 
 # --------------------------------------------------------------------------------------
@@ -46,6 +47,9 @@ cleanup_and_exit() {
   
   # Stop backend server
   stop_server
+  
+  # Stop frontend server
+  stop_frontend
   
   log "Cleanup complete - exiting"
 }
@@ -109,6 +113,96 @@ start_server() {
   done
   
   log "✅ Server up and responding!"
+}
+
+# --------------------------------------------------------------------------------------
+# Frontend server handling (Next.js)
+# --------------------------------------------------------------------------------------
+start_frontend() {
+  if [[ "$INTERRUPTED" == "true" ]]; then
+    return 1
+  fi
+  
+  log "Starting Next.js frontend application..."
+  
+  # Ensure we're in the frontend directory
+  pushd "$ROOT_DIR/frontend" >/dev/null
+  
+  # Install dependencies if node_modules doesn't exist
+  if [[ ! -d "node_modules" ]]; then
+    log "Installing frontend dependencies..."
+    npm install
+  fi
+  
+  # Build the frontend
+  log "Building frontend application..."
+  npm run build
+  
+  # Start the frontend server in background
+  log "Starting frontend server..."
+  npm start > ../frontend.log 2>&1 &
+  FRONTEND_PID=$!
+  
+  popd >/dev/null
+  
+  log "Frontend started with PID: $FRONTEND_PID"
+  log "Waiting for frontend to start at http://localhost:3000 (max 60s)..."
+  
+  local waited=0
+  until curl --silent --fail "http://localhost:3000" >/dev/null 2>&1; do
+    if [[ "$INTERRUPTED" == "true" ]]; then
+      return 1
+    fi
+    
+    # Check if process is still running
+    if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
+      log "❌ Frontend process died unexpectedly!"
+      log "Last few lines of frontend.log:"
+      tail -20 "$ROOT_DIR/frontend.log" || true
+      return 1
+    fi
+    
+    sleep 2
+    ((waited += 2))
+    if (( waited >= 60 )); then
+      log "Frontend failed to start within 60s – aborting."
+      log "Frontend log contents:"
+      cat "$ROOT_DIR/frontend.log" || true
+      return 1
+    fi
+    
+    # Show progress every 10 seconds
+    if (( waited % 10 == 0 )); then
+      log "Still waiting for frontend... (${waited}s elapsed)"
+    fi
+  done
+  
+  log "✅ Frontend up and responding!"
+}
+
+stop_frontend() {
+  if [[ -n "$FRONTEND_PID" ]]; then
+    log "Stopping frontend server (PID: $FRONTEND_PID)..."
+    
+    # Try graceful shutdown first
+    kill "$FRONTEND_PID" 2>/dev/null || true
+    
+    # Wait a few seconds for graceful shutdown
+    for i in {1..10}; do
+      if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        log "Frontend stopped gracefully"
+        FRONTEND_PID=""
+        return 0
+      fi
+      sleep 1
+    done
+    
+    # Force kill if still running
+    log "Force killing frontend process..."
+    kill -9 "$FRONTEND_PID" 2>/dev/null || true
+    FRONTEND_PID=""
+    log "Frontend stopped"
+  fi
 }
 
 stop_server() {
@@ -199,54 +293,72 @@ main() {
   log "Environment: CI=${CI_ENVIRONMENT:-false}"
   log "Java version: $(java -version 2>&1 | head -1)"
   log "Maven version: $(mvn --version 2>&1 | head -1)"
+  log "Node.js version: $(node --version 2>&1 || echo 'Node.js not available')"
+  log "npm version: $(npm --version 2>&1 || echo 'npm not available')"
   
   if [[ "$STOP_ON_ERROR" == "true" ]]; then
     # STOP_ON_ERROR=true: Run tests once, stop on first failure
     local server_retries=0
     
-    # Try to start server with retry limit
+    # Try to start backend server with retry limit
     while ! start_server; do
       if [[ "$INTERRUPTED" == "true" ]]; then
         return 1
       fi
       ((server_retries++))
       if (( server_retries >= MAX_SERVER_RETRIES )); then
-        log "Server failed to start after $MAX_SERVER_RETRIES attempts – giving up."
+        log "Backend server failed to start after $MAX_SERVER_RETRIES attempts – giving up."
         return 1
       fi
-      log "Server failed to start – retrying in 5s ... (attempt $server_retries/$MAX_SERVER_RETRIES)"
+      log "Backend server failed to start – retrying in 5s ... (attempt $server_retries/$MAX_SERVER_RETRIES)"
       stop_server  # Clean up before retry
       sleep 5
     done
     
-    # Server started successfully, run tests once and stop on first failure
+    # Try to start frontend server
+    if ! start_frontend; then
+      log "Frontend server failed to start – stopping backend and exiting."
+      stop_server
+      return 1
+    fi
+    
+    # Both servers started successfully, run tests once and stop on first failure
     run_tests
     local test_rc=$?
     stop_server
+    stop_frontend
     return $test_rc
   else
     # STOP_ON_ERROR=false: Run tests once, continue through all failures, always return 0
     local server_retries=0
     
-    # Try to start server with retry limit
+    # Try to start backend server with retry limit
     while ! start_server; do
       if [[ "$INTERRUPTED" == "true" ]]; then
         return 1
       fi
       ((server_retries++))
       if (( server_retries >= MAX_SERVER_RETRIES )); then
-        log "Server failed to start after $MAX_SERVER_RETRIES attempts – giving up."
+        log "Backend server failed to start after $MAX_SERVER_RETRIES attempts – giving up."
         return 1
       fi
-      log "Server failed to start – retrying in 5s ... (attempt $server_retries/$MAX_SERVER_RETRIES)"
+      log "Backend server failed to start – retrying in 5s ... (attempt $server_retries/$MAX_SERVER_RETRIES)"
       stop_server  # Clean up before retry
       sleep 5
     done
     
-    # Server started successfully, run all tests once
+    # Try to start frontend server
+    if ! start_frontend; then
+      log "Frontend server failed to start – stopping backend and exiting."
+      stop_server
+      return 1
+    fi
+    
+    # Both servers started successfully, run all tests once
     run_tests  # Don't care about exit code when STOP_ON_ERROR=false
     local test_rc=$?
     stop_server
+    stop_frontend
     
     # When STOP_ON_ERROR=false, always return 0 (success) for CI
     log "STOP_ON_ERROR=false: Completed all tests regardless of individual failures."
