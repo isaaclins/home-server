@@ -102,13 +102,26 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
+      - name: Cache OWASP dependency check data
+        uses: actions/cache@v4
+        with:
+          path: ~/.dependency-check
+          key: ${{ runner.os }}-dependency-check-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-dependency-check
+
       - name: Run OWASP Dependency Check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           cd backend
           mvn org.owasp:dependency-check-maven:check \
             -DfailBuildOnCVSS=7 \
             -DsuppressionsLocation=dependency-check-suppressions.xml \
-            -Dformats=ALL
+            -Dformats=ALL \
+            -Dnvd.api.key=${{ secrets.NVD_API_KEY }} \
+            -DretryCount=3 \
+            -DconnectionTimeout=30000 \
+            -DreadTimeout=30000
 
       - name: Upload dependency check results
         uses: actions/upload-artifact@v4
