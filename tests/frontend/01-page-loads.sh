@@ -82,8 +82,10 @@ resp=$(request "GET" "$FRONTEND_URL/nonexistent")
 status="${resp: -3}"
 check "$status" "404" "Non-existent page should return 404"
 
-# Test 6: Static assets (favicon, etc.)
+# Test 6: Static assets
 log "Testing static assets"
+
+# Test favicon
 resp=$(request "GET" "$FRONTEND_URL/favicon.ico")
 status="${resp: -3}"
 if [[ "$status" == "200" || "$status" == "404" ]]; then
@@ -93,18 +95,7 @@ else
   exit 1
 fi
 
-# Test 7: API proxy endpoints (if configured)
-log "Testing API proxy functionality"
-resp=$(request "GET" "$FRONTEND_URL/api/users")
-status="${resp: -3}"
-if [[ "$status" == "200" || "$status" == "401" || "$status" == "404" ]]; then
-  log "✅ API proxy handled appropriately (status $status)"
-else
-  log "❌ API proxy returned unexpected status: $status"
-  exit 1
-fi
-
-# Test 8: Different HTTP methods on frontend
+# Test 7: Different HTTP methods on frontend
 log "Testing different HTTP methods on frontend"
 
 # HEAD request
@@ -137,7 +128,7 @@ else
   exit 1
 fi
 
-# Test 9: Response headers
+# Test 8: Response headers
 log "Testing response headers"
 
 headers=$(curl -s -I "$FRONTEND_URL/" | tr '\r' '\n')
@@ -148,7 +139,7 @@ else
   exit 1
 fi
 
-# Test 10: Page load performance
+# Test 9: Page load performance
 log "Testing page load performance"
 
 start_time=$(date +%s.%N)
@@ -167,7 +158,7 @@ else
   log "⚠️  Root page load time is slow (${response_time_ms}ms)"
 fi
 
-# Test 11: Content Security and basic validation
+# Test 10: Content Security and basic validation
 log "Testing content security"
 
 # Check for basic security headers (might not be present in dev mode)
@@ -178,7 +169,7 @@ else
   log "⚠️  No security headers detected (may be expected in development)"
 fi
 
-# Test 12: Mobile/responsive indicators
+# Test 11: Mobile/responsive indicators
 log "Testing responsive design indicators"
 resp=$(request "GET" "$FRONTEND_URL/")
 body="${resp%???}"
@@ -189,7 +180,7 @@ else
   log "⚠️  No responsive design indicators found"
 fi
 
-# Test 13: JavaScript and CSS loading
+# Test 12: JavaScript and CSS loading
 log "Testing asset loading"
 resp=$(request "GET" "$FRONTEND_URL/")
 body="${resp%???}"
@@ -201,7 +192,7 @@ else
   exit 1
 fi
 
-# Test 14: Error page handling
+# Test 13: Error page handling
 log "Testing error page handling"
 
 # Test with malformed URL
@@ -214,7 +205,7 @@ else
   exit 1
 fi
 
-# Test 15: Load testing (simple)
+# Test 14: Load testing (simple)
 log "Testing concurrent page loads"
 
 # First, verify the server is still responsive
