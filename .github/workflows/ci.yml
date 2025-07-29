@@ -111,6 +111,51 @@ jobs:
       SERVER_PORT: 8080
       ADMIN_SECRET: ${{ secrets.ADMIN_SECRET || 'changeme' }}
 
+      # Additional configuration from .secrets.example
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      INITIAL_ADMIN_USERNAME: testadmin
+      INITIAL_ADMIN_EMAIL: testadmin@example.com
+      INITIAL_ADMIN_PASSWORD: testpassword
+      FRONTEND_PORT: 3000
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_API_BASE_PATH: /api
+      NEXT_TELEMETRY_DISABLED: 1
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      COMPOSE_PROJECT_NAME: homeserver
+      DOCKER_NETWORK: homeserver-network
+      MYSQL_CONTAINER: homeserver-mysql
+      BACKEND_CONTAINER: homeserver-backend
+      FRONTEND_CONTAINER: homeserver-frontend
+      MYSQL_VOLUME: homeserver_mysql_data
+      DEBUG_MODE: false
+      LOG_LEVEL: INFO
+      ENABLE_H2_CONSOLE: false
+      BACKUP_SCHEDULE: "0 2 * * *"
+      BACKUP_RETENTION_DAYS: 30
+      BACKUP_PATH: /var/backups/homeserver
+
+      # Additional MySQL configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_URL: jdbc:mysql://mysql:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+      DB_USERNAME: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+      DB_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
+      DB_DRIVER: com.mysql.cj.jdbc.Driver
+      JPA_DIALECT: org.hibernate.dialect.MySQL8Dialect
+      JPA_DDL_AUTO: validate
+      JPA_SHOW_SQL: true
+
+      # Backend configuration
+      BACKEND_PORT: 8080
+      BACKEND_SPRING_PROFILE: ci
+
+      # Admin configuration (alternative names)
+      ADMIN_USERNAME: testadmin
+      ADMIN_EMAIL: testadmin@example.com
+      ADMIN_PASSWORD: testpassword
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -211,6 +256,43 @@ jobs:
             -e JWT_EXPIRATION=$JWT_EXPIRATION \
             -e SERVER_PORT=$SERVER_PORT \
             -e ADMIN_SECRET=$ADMIN_SECRET \
+            -e INITIAL_ADMIN_USERNAME=testadmin \
+            -e INITIAL_ADMIN_EMAIL=testadmin@example.com \
+            -e INITIAL_ADMIN_PASSWORD=testpassword \
+            -e MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=$MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE \
+            -e MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=$MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS \
+            -e FRONTEND_PORT=$FRONTEND_PORT \
+            -e NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+            -e NEXT_PUBLIC_API_BASE_PATH=$NEXT_PUBLIC_API_BASE_PATH \
+            -e NEXT_TELEMETRY_DISABLED=$NEXT_TELEMETRY_DISABLED \
+            -e NODE_ENV=$NODE_ENV \
+            -e HOSTNAME=$HOSTNAME \
+            -e COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME \
+            -e DOCKER_NETWORK=$DOCKER_NETWORK \
+            -e MYSQL_CONTAINER=$MYSQL_CONTAINER \
+            -e BACKEND_CONTAINER=$BACKEND_CONTAINER \
+            -e FRONTEND_CONTAINER=$FRONTEND_CONTAINER \
+            -e MYSQL_VOLUME=$MYSQL_VOLUME \
+            -e DEBUG_MODE=$DEBUG_MODE \
+            -e LOG_LEVEL=$LOG_LEVEL \
+            -e ENABLE_H2_CONSOLE=$ENABLE_H2_CONSOLE \
+            -e BACKUP_SCHEDULE="$BACKUP_SCHEDULE" \
+            -e BACKUP_RETENTION_DAYS=$BACKUP_RETENTION_DAYS \
+            -e BACKUP_PATH=$BACKUP_PATH \
+            -e DB_HOST=$DB_HOST \
+            -e DB_PORT=$DB_PORT \
+            -e DB_URL=$DB_URL \
+            -e DB_USERNAME=$DB_USERNAME \
+            -e DB_PASSWORD=$DB_PASSWORD \
+            -e DB_DRIVER=$DB_DRIVER \
+            -e JPA_DIALECT=$JPA_DIALECT \
+            -e JPA_DDL_AUTO=$JPA_DDL_AUTO \
+            -e JPA_SHOW_SQL=$JPA_SHOW_SQL \
+            -e BACKEND_PORT=$BACKEND_PORT \
+            -e BACKEND_SPRING_PROFILE=$BACKEND_SPRING_PROFILE \
+            -e ADMIN_USERNAME=$ADMIN_USERNAME \
+            -e ADMIN_EMAIL=$ADMIN_EMAIL \
+            -e ADMIN_PASSWORD=$ADMIN_PASSWORD \
             $IMAGE_NAME
 
           # Check container status
