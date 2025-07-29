@@ -108,6 +108,7 @@ jobs:
       JWT_SECRET: ${{ secrets.JWT_SECRET || 'test_jwt_secret_for_ci_must_be_at_least_256_bits_long_abcdefghijklmnopqrstuvwxyz123456' }}
       JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION || '86400000' }}
       SERVER_PORT: 8080
+      ADMIN_SECRET: ${{ secrets.ADMIN_SECRET || 'changeme' }}
 
     steps:
       - name: Checkout code
@@ -208,6 +209,7 @@ jobs:
             -e JWT_SECRET=$JWT_SECRET \
             -e JWT_EXPIRATION=$JWT_EXPIRATION \
             -e SERVER_PORT=$SERVER_PORT \
+            -e ADMIN_SECRET=$ADMIN_SECRET \
             $IMAGE_NAME
 
           # Check container status
@@ -253,7 +255,7 @@ jobs:
           # Run backend tests against the containerized application
           for test in tests/backend/*.sh; do
             echo "Running $test"
-            bash "$test"
+            ADMIN_SECRET="$ADMIN_SECRET" bash "$test"
           done
 
       - name: Cleanup
@@ -342,6 +344,7 @@ jobs:
       SERVER_PORT: 8080
       NEXT_PUBLIC_API_URL: http://localhost:8080
       NEXT_PUBLIC_ADMIN_SECRET: ${{ secrets.NEXT_PUBLIC_ADMIN_SECRET }}
+      ADMIN_SECRET: ${{ secrets.ADMIN_SECRET || 'changeme' }}
 
     steps:
       - name: Checkout code
@@ -429,6 +432,7 @@ jobs:
             -e JWT_SECRET=$JWT_SECRET \
             -e JWT_EXPIRATION=$JWT_EXPIRATION \
             -e SERVER_PORT=$SERVER_PORT \
+            -e ADMIN_SECRET=$ADMIN_SECRET \
             ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}
 
           # Wait for backend to be ready
