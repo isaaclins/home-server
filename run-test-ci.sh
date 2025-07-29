@@ -75,7 +75,7 @@ start_server() {
   
   # Start Spring Boot application in background
   log "Starting Spring Boot with Maven..."
-  mvn spring-boot:run > ../backend.log 2>&1 &
+  mvn spring-boot:run > "$ROOT_DIR/backend.log" 2>&1 &
   BACKEND_PID=$!
   
   popd >/dev/null
