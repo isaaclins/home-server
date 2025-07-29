@@ -150,6 +150,30 @@ jobs:
             sleep 2
           done
 
+      - name: Setup MySQL user with proper authentication
+        run: |
+          echo "Setting up MySQL user with proper authentication..."
+          mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }} << EOF
+          CREATE USER IF NOT EXISTS '$SPRING_DATASOURCE_USERNAME'@'%' IDENTIFIED WITH mysql_native_password BY '$SPRING_DATASOURCE_PASSWORD';
+          GRANT ALL PRIVILEGES ON ${{ secrets.MYSQL_DATABASE || 'homeserver' }}.* TO '$SPRING_DATASOURCE_USERNAME'@'%';
+          FLUSH PRIVILEGES;
+          EOF
+
+      - name: Test database connectivity
+        run: |
+          # Get the MySQL service container name
+          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
+          echo "Testing connection to MySQL container: $MYSQL_CONTAINER"
+
+          # Test connection from host
+          echo "Testing connection from host:"
+          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+
+          # Test connection from a temporary container on the same network
+          echo "Testing connection from container network:"
+          docker run --rm --network $(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}') \
+            mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+
       - name: Start backend container
         run: |
           # Start the backend container using the appropriate image
@@ -160,12 +184,21 @@ jobs:
           fi
 
           echo "Starting backend container with image: $IMAGE_NAME"
-          
+
+          # Get the MySQL service container name
+          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
+          echo "MySQL container name: $MYSQL_CONTAINER"
+
+          # Connect to the same network as MySQL service
+          MYSQL_NETWORK=$(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}')
+          echo "MySQL network: $MYSQL_NETWORK"
+
           docker run -d \
             --name backend-test \
+            --network $MYSQL_NETWORK \
             -p 8080:8080 \
             -e SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE \
-            -e SPRING_DATASOURCE_URL=$SPRING_DATASOURCE_URL \
+            -e SPRING_DATASOURCE_URL=jdbc:mysql://$MYSQL_CONTAINER:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }} \
             -e SPRING_DATASOURCE_USERNAME=$SPRING_DATASOURCE_USERNAME \
             -e SPRING_DATASOURCE_PASSWORD=$SPRING_DATASOURCE_PASSWORD \
             -e SPRING_DATASOURCE_DRIVER_CLASS_NAME=$SPRING_DATASOURCE_DRIVER_CLASS_NAME \
@@ -180,7 +213,7 @@ jobs:
           # Check container status
           echo "Container status:"
           docker ps -a
-          
+
           # Show container logs if it's not running
           if ! docker ps | grep -q backend-test; then
             echo "Container failed to start. Logs:"
@@ -203,7 +236,7 @@ jobs:
             fi
             sleep 2
           done
-          
+
           # Final check - if still not ready, show logs and fail
           if ! curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
             echo "Backend failed to start. Final logs:"
@@ -292,6 +325,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
+          --default-authentication-plugin=mysql_native_password
 
     env:
       # Application configuration for testing
@@ -345,14 +379,47 @@ jobs:
             sleep 2
           done
 
+      - name: Setup MySQL user with proper authentication
+        run: |
+          echo "Setting up MySQL user with proper authentication..."
+          mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }} << EOF
+          CREATE USER IF NOT EXISTS '$SPRING_DATASOURCE_USERNAME'@'%' IDENTIFIED WITH mysql_native_password BY '$SPRING_DATASOURCE_PASSWORD';
+          GRANT ALL PRIVILEGES ON ${{ secrets.MYSQL_DATABASE || 'homeserver' }}.* TO '$SPRING_DATASOURCE_USERNAME'@'%';
+          FLUSH PRIVILEGES;
+          EOF
+
+      - name: Test database connectivity
+        run: |
+          # Get the MySQL service container name
+          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
+          echo "Testing connection to MySQL container: $MYSQL_CONTAINER"
+
+          # Test connection from host
+          echo "Testing connection from host:"
+          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+
+          # Test connection from a temporary container on the same network
+          echo "Testing connection from container network:"
+          docker run --rm --network $(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}') \
+            mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+
       - name: Start backend container
         run: |
+          # Get the MySQL service container name
+          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
+          echo "MySQL container name: $MYSQL_CONTAINER"
+
+          # Connect to the same network as MySQL service
+          MYSQL_NETWORK=$(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}')
+          echo "MySQL network: $MYSQL_NETWORK"
+
           # Start the backend container using the built image
           docker run -d \
             --name backend-test \
+            --network $MYSQL_NETWORK \
             -p 8080:8080 \
             -e SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE \
-            -e SPRING_DATASOURCE_URL=$SPRING_DATASOURCE_URL \
+            -e SPRING_DATASOURCE_URL=jdbc:mysql://$MYSQL_CONTAINER:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }} \
             -e SPRING_DATASOURCE_USERNAME=$SPRING_DATASOURCE_USERNAME \
             -e SPRING_DATASOURCE_PASSWORD=$SPRING_DATASOURCE_PASSWORD \
             -e SPRING_DATASOURCE_DRIVER_CLASS_NAME=$SPRING_DATASOURCE_DRIVER_CLASS_NAME \
