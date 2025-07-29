@@ -357,14 +357,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js for build-time checks
         uses: actions/setup-node@v4
         with:
           node-version: "18"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install dependencies for build-time checks
         working-directory: frontend
         run: npm ci
 
@@ -377,16 +377,107 @@ jobs:
         run: npm run type-check
         continue-on-error: true
 
-      - name: Build application
-        working-directory: frontend
-        run: npm run build
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build frontend image locally (for PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          # For PRs, build locally since images aren't pushed
+          docker build -t homeserver-frontend:test ./frontend
+
+      - name: Pull frontend image (for non-PRs)
+        if: github.event_name != 'pull_request'
+        run: |
+          # Pull the built image from registry
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-frontend:${{ github.sha }}
+
+      - name: Start frontend container for testing
+        run: |
+          # Start the frontend container using the appropriate image
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            IMAGE_NAME="homeserver-frontend:test"
+          else
+            IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-frontend:${{ github.sha }}"
+          fi
+
+          echo "Starting frontend container with image: $IMAGE_NAME"
+
+          # Start frontend container for testing
+          docker run -d \
+            --name frontend-test \
+            -p 3000:3000 \
+            -e NODE_ENV=production \
+            -e NEXT_TELEMETRY_DISABLED=1 \
+            -e PORT=3000 \
+            -e HOSTNAME=0.0.0.0 \
+            $IMAGE_NAME
+
+          # Check container status
+          echo "Container status:"
+          docker ps -a
+
+          # Show container logs if it's not running
+          if ! docker ps | grep -q frontend-test; then
+            echo "Container failed to start. Logs:"
+            docker logs frontend-test
+            exit 1
+          fi
+
+          # Wait for frontend to be ready
+          echo "Waiting for frontend to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend is ready!"
+              break
+            fi
+            echo "Waiting for frontend... ($i/30)"
+            # Show logs every 10 attempts
+            if [ $((i % 10)) -eq 0 ]; then
+              echo "Recent container logs:"
+              docker logs --tail 20 frontend-test
+            fi
+            sleep 2
+          done
+
+          # Final check - if still not ready, show logs and fail
+          if ! curl -s http://localhost:3000 > /dev/null 2>&1; then
+            echo "Frontend failed to start. Final logs:"
+            docker logs frontend-test
+            exit 1
+          fi
+
+      - name: Run frontend tests
+        run: |
+          # Run frontend tests against the containerized application
+          for test in tests/frontend/*.sh; do
+            echo "Running $test"
+            bash "$test"
+          done
+
+      - name: Copy build artifacts from container
+        run: |
+          # Copy the built application from the container
+          docker cp frontend-test:/app/.next ./frontend-build
 
       - name: Upload frontend build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: frontend/.next/
+          path: frontend-build/
           retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Stop and remove frontend container
+          docker stop frontend-test 2>/dev/null || true
+          docker rm frontend-test 2>/dev/null || true
 
   integration-tests:
     name: Integration Tests
