@@ -27,6 +27,11 @@ public class UserController {
 
     @GetMapping("/users/{id}")
     public ResponseEntity<User> getUserById(@PathVariable Long id) {
+        // Validate that ID is not negative
+        if (id < 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
         Optional<User> user = userService.getUserById(id);
         return user.map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -67,6 +72,11 @@ public class UserController {
     @PutMapping("/users/{id}")
     public ResponseEntity<User> updateUser(@PathVariable Long id, @Valid @RequestBody User userDetails,
             BindingResult bindingResult) {
+        // Validate that ID is not negative
+        if (id < 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
         if (bindingResult.hasErrors()) {
             return ResponseEntity.badRequest().build();
         }
@@ -95,6 +105,11 @@ public class UserController {
 
     @DeleteMapping("/users/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        // Validate that ID is not negative
+        if (id < 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
         if (!userService.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
