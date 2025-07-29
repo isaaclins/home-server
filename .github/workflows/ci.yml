@@ -158,6 +158,8 @@ jobs:
           else
             IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}"
           fi
+
+          echo "Starting backend container with image: $IMAGE_NAME"
           
           docker run -d \
             --name backend-test \
@@ -175,6 +177,17 @@ jobs:
             -e SERVER_PORT=$SERVER_PORT \
             $IMAGE_NAME
 
+          # Check container status
+          echo "Container status:"
+          docker ps -a
+          
+          # Show container logs if it's not running
+          if ! docker ps | grep -q backend-test; then
+            echo "Container failed to start. Logs:"
+            docker logs backend-test
+            exit 1
+          fi
+
           # Wait for backend to be ready
           echo "Waiting for backend to be ready..."
           for i in {1..60}; do
@@ -183,8 +196,20 @@ jobs:
               break
             fi
             echo "Waiting for backend... ($i/60)"
+            # Show logs every 10 attempts
+            if [ $((i % 10)) -eq 0 ]; then
+              echo "Recent container logs:"
+              docker logs --tail 20 backend-test
+            fi
             sleep 2
           done
+          
+          # Final check - if still not ready, show logs and fail
+          if ! curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+            echo "Backend failed to start. Final logs:"
+            docker logs backend-test
+            exit 1
+          fi
 
       - name: Make scripts executable
         run: |
