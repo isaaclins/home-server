@@ -55,12 +55,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Create backend image info file
+        run: |
+          echo "${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}" > backend-image.txt
+
       - name: Upload backend image info
         uses: actions/upload-artifact@v4
         with:
           name: backend-image-info
-          path: |
-            backend-image:${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}
+          path: backend-image.txt
 
   build-frontend:
     name: Build Frontend Image
@@ -105,12 +108,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Create frontend image info file
+        run: |
+          echo "${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-frontend:${{ github.sha }}" > frontend-image.txt
+
       - name: Upload frontend image info
         uses: actions/upload-artifact@v4
         with:
           name: frontend-image-info
-          path: |
-            frontend-image:${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-frontend:${{ github.sha }}
+          path: frontend-image.txt
 
   backend-tests:
     name: Backend Tests
