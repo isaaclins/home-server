@@ -538,6 +538,7 @@ jobs:
           MYSQL_USER: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
+          MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: mysql_native_password
         ports:
           - 3306:3306
         options: >-
@@ -545,7 +546,6 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
-          --default-authentication-plugin=mysql_native_password
 
     env:
       # Application configuration for testing
