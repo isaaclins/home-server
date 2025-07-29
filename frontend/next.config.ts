@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   async rewrites() {
     // Use environment variable for backend URL, fallback to Docker service name
-    const backendUrl = (process.env.BACKEND_URL as string) || 'http://backend:8080';
+    const backendUrl = process.env.BACKEND_URL || 'http://backend:8080';
     
     return [
       {
