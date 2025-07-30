@@ -38,7 +38,7 @@ test.describe('Authentication', () => {
     await page.goto('/login');
     
     // Try to submit empty form if submit button exists
-    const submitButton = page.locator('button[type="submit"], input[type="submit"], button:has-text("Login"), button:has-text("Sign In")');
+    const submitButton = page.locator('[data-testid="submit-button"]');
     if (await submitButton.isVisible()) {
       await submitButton.click();
       
