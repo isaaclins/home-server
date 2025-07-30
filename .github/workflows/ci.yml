@@ -624,6 +624,18 @@ jobs:
           docker run --rm --network $(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}') \
             mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
 
+      - name: Build backend image locally (for PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          # For PRs, build locally since images aren't pushed
+          docker build -t homeserver-backend:test ./backend
+
+      - name: Pull backend image (for non-PRs)
+        if: github.event_name != 'pull_request'
+        run: |
+          # Pull the built image from registry
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}
+
       - name: Start backend container
         run: |
           # Get the MySQL service container name
@@ -634,7 +646,15 @@ jobs:
           MYSQL_NETWORK=$(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}')
           echo "MySQL network: $MYSQL_NETWORK"
 
-          # Start the backend container using the built image
+          # Start the backend container using the appropriate image
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            IMAGE_NAME="homeserver-backend:test"
+          else
+            IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}"
+          fi
+
+          echo "Starting backend container with image: $IMAGE_NAME"
+
           docker run -d \
             --name backend-test \
             --network $MYSQL_NETWORK \
@@ -651,7 +671,7 @@ jobs:
             -e JWT_EXPIRATION=$JWT_EXPIRATION \
             -e SERVER_PORT=$SERVER_PORT \
             -e ADMIN_SECRET=$ADMIN_SECRET \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}
+            $IMAGE_NAME
 
           # Wait for backend to be ready
           echo "Waiting for backend to be ready..."
