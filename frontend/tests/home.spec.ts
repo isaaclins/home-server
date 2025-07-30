@@ -18,7 +18,8 @@ test.describe('Home Page', () => {
     await page.goto('/');
     
     // Wait for redirect to happen
-    await page.waitForURL(/\/login/, { timeout: 10000 });
+    const timeout = parseInt(process.env.TEST_TIMEOUT || '10000', 10);
+    await page.waitForURL(/\/login/, { timeout });
     
     // Should be redirected to login page
     await expect(page).toHaveURL(/\/login/);
