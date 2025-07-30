@@ -13,7 +13,7 @@
     <!-- Use the current GA Spring Boot BOM so we don't have to specify versions for each starter. -->
     <properties>
         <java.version>17</java.version>
-        <spring-boot.version>3.3.3</spring-boot.version>
+        <spring-boot.version>3.5.4</spring-boot.version>
     </properties>
 
     <dependencyManagement>
