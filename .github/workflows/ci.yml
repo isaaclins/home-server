@@ -1,28 +1,139 @@
-name: CI Pipeline
+name: Unified CI Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BASE: ${{ github.repository }}
 
 jobs:
-  test:
+  build-backend:
+    name: Build Backend Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=sha-
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create backend image info file
+        run: |
+          echo "${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}" > backend-image.txt
+
+      - name: Upload backend image info
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-image-info
+          path: backend-image.txt
+
+  build-frontend:
+    name: Build Frontend Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=sha-
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-frontend:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create frontend image info file
+        run: |
+          echo "${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-frontend:${{ github.sha }}" > frontend-image.txt
+
+      - name: Upload frontend image info
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-image-info
+          path: frontend-image.txt
+
+  backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest
+    needs: build-backend
 
     # Service containers to run with the job
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_DATABASE: homeserver_test
-          MYSQL_USER: homeserver_test
-          MYSQL_PASSWORD: test_password
-          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
         ports:
           - 3306:3306
-        # Set health checks to wait until mysql has started
         options: >-
           --health-cmd="mysqladmin ping"
           --health-interval=10s
@@ -31,39 +142,87 @@ jobs:
 
     env:
       # Application configuration for testing
-      SPRING_PROFILES_ACTIVE: test
-      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/homeserver_test
-      SPRING_DATASOURCE_USERNAME: homeserver_test
-      SPRING_DATASOURCE_PASSWORD: test_password
+      SPRING_PROFILES_ACTIVE: ci
+      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
-      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQLDialect
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQL8Dialect
       SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
       SPRING_JPA_SHOW_SQL: true
-      JWT_SECRET: test_jwt_secret_for_ci_pipeline_only
-      JWT_EXPIRATION: 86400000
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'test_jwt_secret_for_ci_must_be_at_least_256_bits_long_abcdefghijklmnopqrstuvwxyz123456' }}
+      JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION || '86400000' }}
       SERVER_PORT: 8080
+      ADMIN_SECRET: ${{ secrets.ADMIN_SECRET || 'changeme' }}
 
-      # Test configuration
-      CI_ENVIRONMENT: "true"
-      SERVER_URL: http://localhost:8080/actuator/health
-      MAX_WAIT_SECONDS: 120
+      # Additional configuration from .secrets.example
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      INITIAL_ADMIN_USERNAME: testadmin
+      INITIAL_ADMIN_EMAIL: testadmin@example.com
+      INITIAL_ADMIN_PASSWORD: testpassword
+      FRONTEND_PORT: 3000
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_API_BASE_PATH: /api
+      NEXT_TELEMETRY_DISABLED: 1
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      COMPOSE_PROJECT_NAME: homeserver
+      DOCKER_NETWORK: homeserver-network
+      MYSQL_CONTAINER: homeserver-mysql
+      BACKEND_CONTAINER: homeserver-backend
+      FRONTEND_CONTAINER: homeserver-frontend
+      MYSQL_VOLUME: homeserver_mysql_data
+      DEBUG_MODE: false
+      LOG_LEVEL: INFO
+      ENABLE_H2_CONSOLE: false
+      BACKUP_SCHEDULE: "0 2 * * *"
+      BACKUP_RETENTION_DAYS: 30
+      BACKUP_PATH: /var/backups/homeserver
+
+      # Additional MySQL configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_URL: jdbc:mysql://mysql:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+      DB_USERNAME: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+      DB_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
+      DB_DRIVER: com.mysql.cj.jdbc.Driver
+      JPA_DIALECT: org.hibernate.dialect.MySQL8Dialect
+      JPA_DDL_AUTO: validate
+      JPA_SHOW_SQL: true
+
+      # Backend configuration
+      BACKEND_PORT: 8080
+      BACKEND_SPRING_PROFILE: ci
+
+      # Admin configuration (alternative names)
+      ADMIN_USERNAME: testadmin
+      ADMIN_EMAIL: testadmin@example.com
+      ADMIN_PASSWORD: testpassword
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
         with:
-          java-version: "17"
-          distribution: "temurin"
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cache Maven packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
+      - name: Build backend image locally (for PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          # For PRs, build locally since images aren't pushed
+          docker build -t homeserver-backend:test ./backend
+
+      - name: Pull backend image (for non-PRs)
+        if: github.event_name != 'pull_request'
+        run: |
+          # Pull the built image from registry
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}
 
       - name: Install MySQL Client
         run: |
@@ -82,45 +241,589 @@ jobs:
             sleep 2
           done
 
-      - name: Initialize Database
+      - name: Setup MySQL user with proper authentication
         run: |
-          mysql -h 127.0.0.1 -u root -p${{ env.MYSQL_ROOT_PASSWORD || 'root_password' }} < db/init.sql
-        env:
-          MYSQL_ROOT_PASSWORD: root_password
+          echo "Setting up MySQL user with proper authentication..."
+          mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }} << EOF
+          CREATE USER IF NOT EXISTS '$SPRING_DATASOURCE_USERNAME'@'%' IDENTIFIED WITH mysql_native_password BY '$SPRING_DATASOURCE_PASSWORD';
+          GRANT ALL PRIVILEGES ON ${{ secrets.MYSQL_DATABASE || 'homeserver' }}.* TO '$SPRING_DATASOURCE_USERNAME'@'%';
+          FLUSH PRIVILEGES;
+          EOF
+
+      - name: Test database connectivity
+        run: |
+          # Get the MySQL service container name
+          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
+          echo "Testing connection to MySQL container: $MYSQL_CONTAINER"
+
+          # Test connection from host
+          echo "Testing connection from host:"
+          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+
+          # Test connection from a temporary container on the same network
+          echo "Testing connection from container network:"
+          docker run --rm --network $(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}') \
+            mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+
+      - name: Start backend container
+        run: |
+          # Start the backend container using the appropriate image
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            IMAGE_NAME="homeserver-backend:test"
+          else
+            IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}"
+          fi
+
+          echo "Starting backend container with image: $IMAGE_NAME"
+
+          # Get the MySQL service container name
+          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
+          echo "MySQL container name: $MYSQL_CONTAINER"
+
+          # Connect to the same network as MySQL service
+          MYSQL_NETWORK=$(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}')
+          echo "MySQL network: $MYSQL_NETWORK"
+
+          docker run -d \
+            --name backend-test \
+            --network $MYSQL_NETWORK \
+            -p 8080:8080 \
+            -e SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE \
+            -e SPRING_DATASOURCE_URL=jdbc:mysql://$MYSQL_CONTAINER:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }} \
+            -e SPRING_DATASOURCE_USERNAME=$SPRING_DATASOURCE_USERNAME \
+            -e SPRING_DATASOURCE_PASSWORD=$SPRING_DATASOURCE_PASSWORD \
+            -e SPRING_DATASOURCE_DRIVER_CLASS_NAME=$SPRING_DATASOURCE_DRIVER_CLASS_NAME \
+            -e SPRING_JPA_DATABASE_PLATFORM=$SPRING_JPA_DATABASE_PLATFORM \
+            -e SPRING_JPA_HIBERNATE_DDL_AUTO=$SPRING_JPA_HIBERNATE_DDL_AUTO \
+            -e SPRING_JPA_SHOW_SQL=$SPRING_JPA_SHOW_SQL \
+            -e JWT_SECRET=$JWT_SECRET \
+            -e JWT_EXPIRATION=$JWT_EXPIRATION \
+            -e SERVER_PORT=$SERVER_PORT \
+            -e ADMIN_SECRET=$ADMIN_SECRET \
+            -e INITIAL_ADMIN_USERNAME=testadmin \
+            -e INITIAL_ADMIN_EMAIL=testadmin@example.com \
+            -e INITIAL_ADMIN_PASSWORD=testpassword \
+            -e MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=$MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE \
+            -e MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=$MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS \
+            -e FRONTEND_PORT=$FRONTEND_PORT \
+            -e NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+            -e NEXT_PUBLIC_API_BASE_PATH=$NEXT_PUBLIC_API_BASE_PATH \
+            -e NEXT_TELEMETRY_DISABLED=$NEXT_TELEMETRY_DISABLED \
+            -e NODE_ENV=$NODE_ENV \
+            -e HOSTNAME=$HOSTNAME \
+            -e COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME \
+            -e DOCKER_NETWORK=$DOCKER_NETWORK \
+            -e MYSQL_CONTAINER=$MYSQL_CONTAINER \
+            -e BACKEND_CONTAINER=$BACKEND_CONTAINER \
+            -e FRONTEND_CONTAINER=$FRONTEND_CONTAINER \
+            -e MYSQL_VOLUME=$MYSQL_VOLUME \
+            -e DEBUG_MODE=$DEBUG_MODE \
+            -e LOG_LEVEL=$LOG_LEVEL \
+            -e ENABLE_H2_CONSOLE=$ENABLE_H2_CONSOLE \
+            -e BACKUP_SCHEDULE="$BACKUP_SCHEDULE" \
+            -e BACKUP_RETENTION_DAYS=$BACKUP_RETENTION_DAYS \
+            -e BACKUP_PATH=$BACKUP_PATH \
+            -e DB_HOST=$DB_HOST \
+            -e DB_PORT=$DB_PORT \
+            -e DB_URL=$DB_URL \
+            -e DB_USERNAME=$DB_USERNAME \
+            -e DB_PASSWORD=$DB_PASSWORD \
+            -e DB_DRIVER=$DB_DRIVER \
+            -e JPA_DIALECT=$JPA_DIALECT \
+            -e JPA_DDL_AUTO=$JPA_DDL_AUTO \
+            -e JPA_SHOW_SQL=$JPA_SHOW_SQL \
+            -e BACKEND_PORT=$BACKEND_PORT \
+            -e BACKEND_SPRING_PROFILE=$BACKEND_SPRING_PROFILE \
+            -e ADMIN_USERNAME=$ADMIN_USERNAME \
+            -e ADMIN_EMAIL=$ADMIN_EMAIL \
+            -e ADMIN_PASSWORD=$ADMIN_PASSWORD \
+            $IMAGE_NAME
+
+          # Check container status
+          echo "Container status:"
+          docker ps -a
+
+          # Show container logs if it's not running
+          if ! docker ps | grep -q backend-test; then
+            echo "Container failed to start. Logs:"
+            docker logs backend-test
+            exit 1
+          fi
+
+          # Wait for backend to be ready
+          echo "Waiting for backend to be ready..."
+          for i in {1..60}; do
+            if curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              break
+            fi
+            echo "Waiting for backend... ($i/60)"
+            # Show logs every 10 attempts
+            if [ $((i % 10)) -eq 0 ]; then
+              echo "Recent container logs:"
+              docker logs --tail 20 backend-test
+            fi
+            sleep 2
+          done
+
+          # Final check - if still not ready, show logs and fail
+          if ! curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+            echo "Backend failed to start. Final logs:"
+            docker logs backend-test
+            exit 1
+          fi
 
       - name: Make scripts executable
         run: |
-          chmod +x run-test.sh tests/backend/01-succeed.sh
-          chmod +x run-test-ci.sh
+          chmod +x tests/**/*.sh
 
-      - name: Verify Environment Setup
+      - name: Run Backend Tests
         run: |
-          echo "=== Environment ==="
-          echo "Java version:"
-          java -version
-          echo "Maven version:"
-          mvn --version
-          echo "MySQL connection test:"
-          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 'Connection successful'" homeserver_test
+          # Run backend tests against the containerized application
+          for test in tests/backend/*.sh; do
+            echo "Running $test"
+            ADMIN_SECRET="$ADMIN_SECRET" bash "$test"
+          done
 
-      - name: Run Tests
-        run: ./run-test-ci.sh
-
-      - name: Publish Test Results
-        uses: dorny/test-reporter@v1
+      - name: Cleanup
         if: always()
-        with:
-          name: Maven Tests
-          path: backend/target/surefire-reports/TEST-*.xml
-          reporter: java-junit
-          fail-on-error: true
+        run: |
+          # Stop and remove backend container
+          docker stop backend-test 2>/dev/null || true
+          docker rm backend-test 2>/dev/null || true
 
-      - name: Upload test artifacts
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    needs: build-frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js for build-time checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies for build-time checks
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Run TypeScript type check
+        working-directory: frontend
+        run: npm run type-check
+        continue-on-error: true
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build frontend image locally (for PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          # For PRs, build locally since images aren't pushed
+          docker build -t homeserver-frontend:test ./frontend
+
+      - name: Pull frontend image (for non-PRs)
+        if: github.event_name != 'pull_request'
+        run: |
+          # Pull the built image from registry
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-frontend:${{ github.sha }}
+
+      - name: Start frontend container for testing
+        run: |
+          # Start the frontend container using the appropriate image
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            IMAGE_NAME="homeserver-frontend:test"
+          else
+            IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-frontend:${{ github.sha }}"
+          fi
+
+          echo "Starting frontend container with image: $IMAGE_NAME"
+
+          # Start frontend container for testing
+          docker run -d \
+            --name frontend-test \
+            -p 3000:3000 \
+            -e NODE_ENV=production \
+            -e NEXT_TELEMETRY_DISABLED=1 \
+            -e PORT=3000 \
+            -e HOSTNAME=0.0.0.0 \
+            $IMAGE_NAME
+
+          # Check container status
+          echo "Container status:"
+          docker ps -a
+
+          # Show container logs if it's not running
+          if ! docker ps | grep -q frontend-test; then
+            echo "Container failed to start. Logs:"
+            docker logs frontend-test
+            exit 1
+          fi
+
+          # Wait for frontend to be ready
+          echo "Waiting for frontend to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend is ready!"
+              break
+            fi
+            echo "Waiting for frontend... ($i/30)"
+            # Show logs every 10 attempts
+            if [ $((i % 10)) -eq 0 ]; then
+              echo "Recent container logs:"
+              docker logs --tail 20 frontend-test
+            fi
+            sleep 2
+          done
+
+          # Final check - if still not ready, show logs and fail
+          if ! curl -s http://localhost:3000 > /dev/null 2>&1; then
+            echo "Frontend failed to start. Final logs:"
+            docker logs frontend-test
+            exit 1
+          fi
+
+      - name: Run frontend tests
+        run: |
+          # Run frontend tests against the containerized application
+          for test in tests/frontend/*.sh; do
+            echo "Running $test"
+            bash "$test"
+          done
+
+      - name: Copy build artifacts from container
+        run: |
+          # Copy the built application from the container
+          docker cp frontend-test:/app/.next ./frontend-build
+
+      - name: Upload frontend build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend-build/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Stop and remove frontend container
+          docker stop frontend-test 2>/dev/null || true
+          docker rm frontend-test 2>/dev/null || true
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    if: github.event_name == 'pull_request'
+
+    # Service containers to run with the job
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+          MYSQL_USER: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
+          MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: mysql_native_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    env:
+      # Application configuration for testing
+      SPRING_PROFILES_ACTIVE: ci
+      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQL8Dialect
+      SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
+      SPRING_JPA_SHOW_SQL: true
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'test_jwt_secret_for_ci_must_be_at_least_256_bits_long_abcdefghijklmnopqrstuvwxyz123456' }}
+      JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION || '86400000' }}
+      SERVER_PORT: 8080
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_ADMIN_SECRET: ${{ secrets.NEXT_PUBLIC_ADMIN_SECRET }}
+      ADMIN_SECRET: ${{ secrets.ADMIN_SECRET || 'changeme' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright
+        working-directory: frontend
+        run: npx playwright install
+
+      - name: Install MySQL Client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mysql-client
+
+      - name: Wait for MySQL to be ready
+        run: |
+          echo "Waiting for MySQL to be ready..."
+          for i in {1..30}; do
+            if mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1" >/dev/null 2>&1; then
+              echo "MySQL is ready!"
+              break
+            fi
+            echo "Waiting for MySQL... ($i/30)"
+            sleep 2
+          done
+
+      - name: Setup MySQL user with proper authentication
+        run: |
+          echo "Setting up MySQL user with proper authentication..."
+          mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }} << EOF
+          CREATE USER IF NOT EXISTS '$SPRING_DATASOURCE_USERNAME'@'%' IDENTIFIED WITH mysql_native_password BY '$SPRING_DATASOURCE_PASSWORD';
+          GRANT ALL PRIVILEGES ON ${{ secrets.MYSQL_DATABASE || 'homeserver' }}.* TO '$SPRING_DATASOURCE_USERNAME'@'%';
+          FLUSH PRIVILEGES;
+          EOF
+
+      - name: Test database connectivity
+        run: |
+          # Get the MySQL service container name
+          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
+          echo "Testing connection to MySQL container: $MYSQL_CONTAINER"
+
+          # Test connection from host
+          echo "Testing connection from host:"
+          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+
+          # Test connection from a temporary container on the same network
+          echo "Testing connection from container network:"
+          docker run --rm --network $(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}') \
+            mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+
+      - name: Build backend image locally (for PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          # For PRs, build locally since images aren't pushed
+          docker build -t homeserver-backend:test ./backend
+
+      - name: Pull backend image (for non-PRs)
+        if: github.event_name != 'pull_request'
+        run: |
+          # Pull the built image from registry
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}
+
+      - name: Start backend container
+        run: |
+          # Get the MySQL service container name
+          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
+          echo "MySQL container name: $MYSQL_CONTAINER"
+
+          # Connect to the same network as MySQL service
+          MYSQL_NETWORK=$(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}')
+          echo "MySQL network: $MYSQL_NETWORK"
+
+          # Start the backend container using the appropriate image
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            IMAGE_NAME="homeserver-backend:test"
+          else
+            IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}-backend:${{ github.sha }}"
+          fi
+
+          echo "Starting backend container with image: $IMAGE_NAME"
+
+          docker run -d \
+            --name backend-test \
+            --network $MYSQL_NETWORK \
+            -p 8080:8080 \
+            -e SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE \
+            -e SPRING_DATASOURCE_URL=jdbc:mysql://$MYSQL_CONTAINER:3306/${{ secrets.MYSQL_DATABASE || 'homeserver' }} \
+            -e SPRING_DATASOURCE_USERNAME=$SPRING_DATASOURCE_USERNAME \
+            -e SPRING_DATASOURCE_PASSWORD=$SPRING_DATASOURCE_PASSWORD \
+            -e SPRING_DATASOURCE_DRIVER_CLASS_NAME=$SPRING_DATASOURCE_DRIVER_CLASS_NAME \
+            -e SPRING_JPA_DATABASE_PLATFORM=$SPRING_JPA_DATABASE_PLATFORM \
+            -e SPRING_JPA_HIBERNATE_DDL_AUTO=$SPRING_JPA_HIBERNATE_DDL_AUTO \
+            -e SPRING_JPA_SHOW_SQL=$SPRING_JPA_SHOW_SQL \
+            -e JWT_SECRET=$JWT_SECRET \
+            -e JWT_EXPIRATION=$JWT_EXPIRATION \
+            -e SERVER_PORT=$SERVER_PORT \
+            -e ADMIN_SECRET=$ADMIN_SECRET \
+            $IMAGE_NAME
+
+          # Wait for backend to be ready
+          echo "Waiting for backend to be ready..."
+          for i in {1..60}; do
+            if curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              break
+            fi
+            echo "Waiting for backend... ($i/60)"
+            sleep 2
+          done
+
+      - name: Start frontend server
+        working-directory: frontend
+        run: |
+          # Build the application first
+          npm run build
+
+          # Start the frontend server in the background using standalone server
+          npm start &
+          FRONTEND_PID=$!
+          echo "Frontend server started with PID: $FRONTEND_PID"
+
+          # Wait for frontend to be ready
+          echo "Waiting for frontend server to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend server is ready!"
+              break
+            fi
+            echo "Waiting for frontend server... ($i/30)"
+            sleep 2
+          done
+
+          # Store PID for cleanup
+          echo $FRONTEND_PID > /tmp/frontend.pid
+
+      - name: Run frontend integration tests
+        working-directory: frontend
+        run: |
+          # Make test scripts executable
+          chmod +x ../tests/frontend/*.sh
+
+          # Run frontend tests
+          for test in ../tests/frontend/*.sh; do
+            echo "Running $test"
+            bash "$test"
+          done
+
+      - name: Stop frontend server
+        if: always()
+        run: |
+          if [[ -f /tmp/frontend.pid ]]; then
+            FRONTEND_PID=$(cat /tmp/frontend.pid)
+            echo "Stopping frontend server with PID: $FRONTEND_PID"
+            kill $FRONTEND_PID 2>/dev/null || true
+            rm -f /tmp/frontend.pid
+          fi
+
+      - name: Run Playwright tests
+        working-directory: frontend
+        run: npx playwright test
+        continue-on-error: true
+
+      - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results
-          path: |
-            backend/target/surefire-reports/
-            backend/target/site/
-          retention-days: 7
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Stop and remove backend container
+          docker stop backend-test 2>/dev/null || true
+          docker rm backend-test 2>/dev/null || true
+
+          # Also stop any remaining frontend server
+          if [[ -f /tmp/frontend.pid ]]; then
+            FRONTEND_PID=$(cat /tmp/frontend.pid)
+            echo "Stopping frontend server with PID: $FRONTEND_PID"
+            kill $FRONTEND_PID 2>/dev/null || true
+            rm -f /tmp/frontend.pid
+          fi
+
+  lighthouse:
+    name: Lighthouse Performance Audit
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    if: github.event_name == 'pull_request'
+    # Run independently to avoid port conflicts
+    env:
+      NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_ADMIN_SECRET: ${{ secrets.NEXT_PUBLIC_ADMIN_SECRET }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build application
+        working-directory: frontend
+        run: npm run build
+
+      - name: Start frontend server
+        working-directory: frontend
+        run: |
+          # Start the frontend server in the background using standalone server
+          npm start &
+          FRONTEND_PID=$!
+          echo "Frontend server started with PID: $FRONTEND_PID"
+
+          # Wait for frontend to be ready
+          echo "Waiting for frontend server to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend server is ready!"
+              break
+            fi
+            echo "Waiting for frontend server... ($i/30)"
+            sleep 2
+          done
+
+          # Store PID for cleanup
+          echo $FRONTEND_PID > /tmp/frontend.pid
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v11
+        with:
+          configPath: "./frontend/lighthouserc.js"
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+          runs: 3
+
+      - name: Stop frontend server
+        if: always()
+        run: |
+          if [[ -f /tmp/frontend.pid ]]; then
+            FRONTEND_PID=$(cat /tmp/frontend.pid)
+            echo "Stopping frontend server with PID: $FRONTEND_PID"
+            kill $FRONTEND_PID 2>/dev/null || true
+            rm -f /tmp/frontend.pid
+          fi

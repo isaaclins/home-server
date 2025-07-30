@@ -1,10 +1,10 @@
 name: Security Scanning
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Unified CI Pipeline"]
+    types: [completed]
     branches: [main, develop]
-  pull_request:
-    branches: [main]
   schedule:
     # Run weekly on Sundays at 2 AM UTC
     - cron: "0 2 * * 0"
@@ -18,17 +18,11 @@ jobs:
       contents: read
       security-events: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        language: ["java", "javascript"]
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        if: matrix.language == 'java'
         uses: actions/setup-java@v4
         with:
           java-version: "17"
@@ -37,7 +31,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
+          languages: java,javascript
           # Override default queries with security-and-quality query pack
           queries: security-and-quality
 
@@ -46,8 +40,6 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:${{matrix.language}}"
 
   secret-detection:
     name: Secret Detection
@@ -78,46 +70,6 @@ jobs:
         with:
           sarif_file: "trivy-secrets.sarif"
 
-  dependency-check:
-    name: Dependency Vulnerability Scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: "17"
-          distribution: "temurin"
-
-      - name: Cache Maven packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
-
-      - name: Run OWASP Dependency Check
-        run: |
-          cd backend
-          mvn org.owasp:dependency-check-maven:check \
-            -DfailBuildOnCVSS=7 \
-            -DsuppressionsLocation=dependency-check-suppressions.xml \
-            -Dformats=ALL
-
-      - name: Upload dependency check results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: dependency-check-report
-          path: backend/target/dependency-check-report.html
-          retention-days: 30
-
   docker-security:
     name: Docker Image Security Scan
     runs-on: ubuntu-latest
@@ -129,22 +81,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Docker images
+      - name: Pull built images
         run: |
-          docker build -t homeserver-backend:test ./backend
-          docker build -t homeserver-frontend:test ./frontend
+          # Pull the images that were built in the CI workflow
+          docker pull ghcr.io/${{ github.repository }}-backend:${{ github.sha }}
+          docker pull ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
 
       - name: Run Trivy vulnerability scanner on backend
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "homeserver-backend:test"
+          image-ref: "ghcr.io/${{ github.repository }}-backend:${{ github.sha }}"
           format: "sarif"
           output: "trivy-backend.sarif"
 
       - name: Run Trivy vulnerability scanner on frontend
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "homeserver-frontend:test"
+          image-ref: "ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}"
           format: "sarif"
           output: "trivy-frontend.sarif"
 

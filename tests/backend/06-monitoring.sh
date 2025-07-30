@@ -92,8 +92,14 @@ check "$status" "200" "Get recent requests with limit"
 
 # Test 6: Requests since timestamp
 log "Testing requests since timestamp"
-# Use macOS/BSD compatible date command
-since_time=$(date -u -v-1H +"%Y-%m-%dT%H:%M:%S")
+# Use cross-platform date command (works on both macOS and Linux)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS/BSD date syntax
+    since_time=$(date -u -v-1H +"%Y-%m-%dT%H:%M:%S")
+else
+    # Linux GNU date syntax
+    since_time=$(date -u -d "1 hour ago" +"%Y-%m-%dT%H:%M:%S")
+fi
 resp=$(request_with_auth "GET" "$BASE_URL/api/monitoring/requests/since?since=${since_time}" "$TOKEN")
 status="${resp: -3}"
 check "$status" "200" "Get requests since timestamp"

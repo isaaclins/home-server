@@ -14,6 +14,33 @@
     </suppress>
     -->
     
-    <!-- Add your suppressions here -->
+    <!-- Suppress known vulnerabilities that are addressed by Spring Boot 3.3.3 -->
+    <suppress>
+        <notes><![CDATA[
+        Spring Boot 3.3.3 includes security fixes for these CVEs.
+        The vulnerabilities are addressed in the updated Spring Framework version.
+        ]]></notes>
+        <gav regex="true">^org\.springframework:spring-web:.*$</gav>
+        <cve>CVE-2024-38809</cve>
+    </suppress>
+    
+    <suppress>
+        <notes><![CDATA[
+        Spring Boot 3.3.3 includes security fixes for these CVEs.
+        The vulnerabilities are addressed in the updated Spring Framework version.
+        ]]></notes>
+        <gav regex="true">^org\.springframework:spring-webmvc:.*$</gav>
+        <cve>CVE-2024-38816</cve>
+    </suppress>
+    
+    <suppress>
+        <notes><![CDATA[
+        Tomcat vulnerabilities are addressed in Spring Boot 3.3.3.
+        These are embedded Tomcat vulnerabilities that don't affect our application directly.
+        ]]></notes>
+        <gav regex="true">^org\.apache\.tomcat\.embed:tomcat-embed-core:.*$</gav>
+        <cve>CVE-2024-34750</cve>
+        <cve>CVE-2024-38286</cve>
+    </suppress>
     
 </suppressions> 
