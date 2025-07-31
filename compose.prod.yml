@@ -1,0 +1,165 @@
+# Production Docker Compose Override with Enhanced Security
+# Usage: docker-compose -f compose.yml -f compose.prod.yml up -d
+
+services:
+  # MySQL Database with enhanced security
+  mysql:
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --skip-name-resolve
+      --skip-networking=false
+      --bind-address=0.0.0.0
+      --default-time-zone='+00:00'
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=256M
+      --max-connections=100
+      --thread-cache-size=50
+      --query-cache-size=0
+      --tmp-table-size=32M
+      --max-heap-table-size=32M
+      --slow-query-log=1
+      --slow-query-log-file=/var/log/mysql/slow.log
+      --long-query-time=2
+      --log-error=/var/log/mysql/error.log
+      --general-log=0
+      --log-bin-trust-function-creators=1
+      --secure-file-priv=/tmp
+      --local-infile=0
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - mysql_logs:/var/log/mysql
+    networks:
+      - backend-network
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    
+  # Backend with security enhancements
+  backend:
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,uid=1001,gid=1001,mode=1700
+    volumes:
+      - backend_logs:/app/logs:rw
+    networks:
+      - backend-network
+      - frontend-network
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Frontend with security enhancements  
+  frontend:
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,uid=1001,gid=1001,mode=1700
+      - /app/.next/cache:size=100M,uid=1001,gid=1001,mode=1700
+    networks:
+      - frontend-network
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+
+  # Nginx reverse proxy with SSL termination
+  nginx:
+    image: nginx:alpine
+    container_name: ${NGINX_CONTAINER:-homeserver-nginx}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/letsencrypt:ro
+      - nginx_cache:/var/cache/nginx
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - frontend-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+
+  # Redis for caching and rate limiting (future enhancement)
+  redis:
+    image: redis:7-alpine
+    container_name: ${REDIS_CONTAINER:-homeserver-redis}
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 60
+      --timeout 300
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
+volumes:
+  mysql_data:
+    driver: local
+  mysql_logs:
+    driver: local
+  backend_logs:
+    driver: local  
+  nginx_cache:
+    driver: local
+  nginx_logs:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  # Separate backend network for database access
+  backend-network:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+  
+  # Frontend network for web traffic
+  frontend-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
