@@ -733,7 +733,7 @@ jobs:
 
       - name: Run Playwright tests
         working-directory: frontend
-        run: npx playwright test
+        run: npx playwright test --config=playwright.config.ts
         continue-on-error: true
 
       - name: Upload Playwright report
