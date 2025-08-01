@@ -1,6 +1,23 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
+  "extends": ["config:recommended"],
+  "baseBranches": ["develop"],
+  "labels": ["dependencies", "automated"],
+  "assignees": ["@isaaclins"],
+  "commitMessagePrefix": "chore(deps):",
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchPackagePatterns": ["^@types/"],
+      "groupName": "TypeScript type definitions",
+      "groupSlug": "typescript-types"
+    },
+    {
+      "matchPackagePatterns": ["^eslint"],
+      "groupName": "ESLint packages",
+      "groupSlug": "eslint"
+    }
   ]
 }

@@ -8,6 +8,7 @@ on:
   schedule:
     # Run weekly on Sundays at 2 AM UTC
     - cron: "0 2 * * 0"
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   codeql:
@@ -40,6 +41,45 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+
+  dependency-check:
+    name: OWASP Dependency Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+
+      - name: Run OWASP Dependency Check
+        run: |
+          cd backend
+          mvn clean compile org.owasp:dependency-check-maven:check \
+            -DsuppressionFile=dependency-check-suppressions.xml \
+            -DfailBuildOnCVSS=7 \
+            -Dformats=ALL \
+            -DretireJsAnalyzerEnabled=false
+
+      - name: Upload Dependency Check Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-check-report
+          path: backend/target/dependency-check-report.html
 
   secret-detection:
     name: Secret Detection
@@ -81,23 +121,38 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Pull built images
-        run: |
-          # Pull the images that were built in the CI workflow
-          docker pull ghcr.io/${{ github.repository }}-backend:${{ github.sha }}
-          docker pull ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          tags: backend:security-scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: false
+          tags: frontend:security-scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner on backend
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "ghcr.io/${{ github.repository }}-backend:${{ github.sha }}"
+          image-ref: "backend:security-scan"
           format: "sarif"
           output: "trivy-backend.sarif"
 
       - name: Run Trivy vulnerability scanner on frontend
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}"
+          image-ref: "frontend:security-scan"
           format: "sarif"
           output: "trivy-frontend.sarif"
 
@@ -114,3 +169,85 @@ jobs:
         with:
           sarif_file: "trivy-frontend.sarif"
           category: "docker-frontend"
+
+  npm-audit:
+    name: NPM Security Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run npm audit
+        run: |
+          cd frontend
+          npm audit --audit-level=moderate --json > audit-results.json || true
+
+      - name: Upload audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-results
+          path: frontend/audit-results.json
+
+  security-headers-test:
+    name: Security Headers Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up services for testing
+        run: |
+          cp .secrets.example .secrets
+          ./setup-secrets.sh
+          docker compose up -d --wait
+
+      - name: Wait for services to be ready
+        run: |
+          timeout 120 bash -c 'until curl -f http://localhost:8080/actuator/health; do sleep 2; done'
+
+      - name: Run security tests
+        run: |
+          ./run-security-tests.sh
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [codeql, dependency-check, secret-detection, docker-security, npm-audit, security-headers-test]
+    if: always()
+    
+    steps:
+      - name: Security Scan Summary
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan Type | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL | ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Check | ${{ needs.dependency-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Detection | ${{ needs.secret-detection.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Security | ${{ needs.docker-security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| NPM Audit | ${{ needs.npm-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Headers | ${{ needs.security-headers-test.result }} |" >> $GITHUB_STEP_SUMMARY
