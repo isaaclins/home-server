@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.*;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.LocalDateTime;
 
@@ -21,7 +22,7 @@ public class User {
     private Long id;
 
     @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    @Size(min = 1, max = 50, message = "Username must be at most 50 characters")
     @Column(unique = true, nullable = false)
     private String username;
 
@@ -32,18 +33,111 @@ public class User {
     private String email;
 
     @NotBlank(message = "Password is required")
-    @Size(min = 8, message = "Password must be at least 8 characters")
+    @Size(min = 8, max = 128, message = "Password must be between 8 and 128 characters")
     @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     private String hashedPassword;
 
+    @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
 
     // Indicates if this user has administrative privileges
     @Column(nullable = false)
     private Boolean isAdmin = false;
 
+    // Account status
+    @Column(nullable = false)
+    private Boolean isActive = true;
+
+    // Account lockout
+    @Column(nullable = false)
+    private Boolean isLocked = false;
+
+    // Failed login attempts
+    @Column(nullable = false)
+    private Integer failedLoginAttempts = 0;
+
+    // Last login timestamp
+    private LocalDateTime lastLogin;
+
+    // Last password change
+    private LocalDateTime lastPasswordChange;
+
     @PrePersist
     public void prePersist() {
-        createdAt = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
+        lastPasswordChange = now;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Sets the password by hashing it with BCrypt
+     */
+    public void setPassword(String plainPassword) {
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+        this.hashedPassword = encoder.encode(plainPassword);
+        this.lastPasswordChange = LocalDateTime.now();
+    }
+
+    /**
+     * Checks if the password matches the stored hash
+     */
+    public boolean checkPassword(String plainPassword) {
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+        return encoder.matches(plainPassword, this.hashedPassword);
+    }
+
+    /**
+     * Locks the account
+     */
+    public void lockAccount() {
+        this.isLocked = true;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Unlocks the account and resets failed login attempts
+     */
+    public void unlockAccount() {
+        this.isLocked = false;
+        this.failedLoginAttempts = 0;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Increments failed login attempts
+     */
+    public void incrementFailedLoginAttempts() {
+        this.failedLoginAttempts++;
+        this.updatedAt = LocalDateTime.now();
+
+        // Lock account after 5 failed attempts
+        if (this.failedLoginAttempts >= 5) {
+            lockAccount();
+        }
+    }
+
+    /**
+     * Resets failed login attempts on successful login
+     */
+    public void resetFailedLoginAttempts() {
+        this.failedLoginAttempts = 0;
+        this.lastLogin = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Checks if the account is usable (active and not locked)
+     */
+    public boolean isAccountUsable() {
+        return isActive && !isLocked;
     }
 }
