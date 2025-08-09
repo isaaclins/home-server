@@ -22,8 +22,7 @@ public class User {
     private Long id;
 
     @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
-    @Pattern(regexp = "^[a-zA-Z0-9._-]+$", message = "Username can only contain letters, numbers, dots, underscores, and hyphens")
+    @Size(min = 1, max = 50, message = "Username must be at most 50 characters")
     @Column(unique = true, nullable = false)
     private String username;
 
@@ -35,8 +34,6 @@ public class User {
 
     @NotBlank(message = "Password is required")
     @Size(min = 8, max = 128, message = "Password must be between 8 and 128 characters")
-    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$", 
-             message = "Password must contain at least one lowercase letter, one uppercase letter, one digit, and one special character")
     @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     private String hashedPassword;
 
@@ -121,7 +118,7 @@ public class User {
     public void incrementFailedLoginAttempts() {
         this.failedLoginAttempts++;
         this.updatedAt = LocalDateTime.now();
-        
+
         // Lock account after 5 failed attempts
         if (this.failedLoginAttempts >= 5) {
             lockAccount();

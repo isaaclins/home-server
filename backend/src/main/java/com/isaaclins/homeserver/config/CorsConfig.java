@@ -9,7 +9,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class CorsConfig {
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000}")
+    @Value("${app.cors.allowed-origins:*}")
     private String[] allowedOrigins;
 
     @Value("${app.cors.max-age:3600}")
@@ -21,13 +21,14 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/api/**")
-                        .allowedOrigins(allowedOrigins)
+                        .allowedOrigins("*")
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                        .allowedHeaders("Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-API-Version")
+                        .allowedHeaders("Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin",
+                                "X-API-Version")
                         .exposedHeaders("X-Total-Count", "X-Page-Number", "X-Page-Size")
-                        .allowCredentials(true)
+                        .allowCredentials(false)
                         .maxAge(maxAge);
-                
+
                 // Health endpoints for monitoring (more restrictive)
                 registry.addMapping("/actuator/health")
                         .allowedOrigins("*")

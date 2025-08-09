@@ -8,9 +8,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.security.access.AccessDeniedException;
@@ -32,7 +37,7 @@ public class ValidationConfig implements WebMvcConfigurer {
         @ExceptionHandler(MethodArgumentNotValidException.class)
         public ResponseEntity<ValidationErrorResponse> handleValidationExceptions(
                 MethodArgumentNotValidException ex, HttpServletRequest request) {
-            
+
             Map<String, String> errors = new HashMap<>();
             ex.getBindingResult().getAllErrors().forEach((error) -> {
                 String fieldName = ((FieldError) error).getField();
@@ -52,6 +57,73 @@ public class ValidationConfig implements WebMvcConfigurer {
             return ResponseEntity.badRequest().body(errorResponse);
         }
 
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<ValidationErrorResponse> handleHttpMessageNotReadable(
+                HttpMessageNotReadableException ex, HttpServletRequest request) {
+            ValidationErrorResponse errorResponse = ValidationErrorResponse.builder()
+                    .timestamp(LocalDateTime.now())
+                    .status(HttpStatus.BAD_REQUEST.value())
+                    .error("Bad Request")
+                    .message("Malformed JSON request")
+                    .path(request.getRequestURI())
+                    .build();
+
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+        public ResponseEntity<ValidationErrorResponse> handleMethodNotSupported(
+                HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+            ValidationErrorResponse errorResponse = ValidationErrorResponse.builder()
+                    .timestamp(LocalDateTime.now())
+                    .status(HttpStatus.METHOD_NOT_ALLOWED.value())
+                    .error("Method Not Allowed")
+                    .message("HTTP method not supported for this endpoint")
+                    .path(request.getRequestURI())
+                    .build();
+
+            return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(errorResponse);
+        }
+
+        @ExceptionHandler(NoHandlerFoundException.class)
+        public ResponseEntity<ValidationErrorResponse> handleNoHandlerFound(
+                NoHandlerFoundException ex, HttpServletRequest request) {
+            ValidationErrorResponse errorResponse = ValidationErrorResponse.builder()
+                    .timestamp(LocalDateTime.now())
+                    .status(HttpStatus.NOT_FOUND.value())
+                    .error("Not Found")
+                    .message("Endpoint not found")
+                    .path(request.getRequestURI())
+                    .build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+        }
+
+        @ExceptionHandler(NoResourceFoundException.class)
+        public ResponseEntity<ValidationErrorResponse> handleNoResourceFound(
+                NoResourceFoundException ex, HttpServletRequest request) {
+            ValidationErrorResponse errorResponse = ValidationErrorResponse.builder()
+                    .timestamp(LocalDateTime.now())
+                    .status(HttpStatus.NOT_FOUND.value())
+                    .error("Not Found")
+                    .message("Resource not found")
+                    .path(request.getRequestURI())
+                    .build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+        }
+
+        @ExceptionHandler(ResponseStatusException.class)
+        public ResponseEntity<ValidationErrorResponse> handleResponseStatus(
+                ResponseStatusException ex, HttpServletRequest request) {
+            ValidationErrorResponse errorResponse = ValidationErrorResponse.builder()
+                    .timestamp(LocalDateTime.now())
+                    .status(ex.getStatusCode().value())
+                    .error(ex.getStatusCode().toString())
+                    .message(ex.getReason() != null ? ex.getReason() : "")
+                    .path(request.getRequestURI())
+                    .build();
+            return ResponseEntity.status(ex.getStatusCode()).body(errorResponse);
+        }
+
         @ExceptionHandler(ConstraintViolationException.class)
         public ResponseEntity<ValidationErrorResponse> handleConstraintViolationException(
                 ConstraintViolationException ex, HttpServletRequest request) {
@@ -59,8 +131,7 @@ public class ValidationConfig implements WebMvcConfigurer {
             Map<String, String> errors = ex.getConstraintViolations().stream()
                     .collect(Collectors.toMap(
                             violation -> violation.getPropertyPath().toString(),
-                            ConstraintViolation::getMessage
-                    ));
+                            ConstraintViolation::getMessage));
 
             ValidationErrorResponse errorResponse = ValidationErrorResponse.builder()
                     .timestamp(LocalDateTime.now())
@@ -162,20 +233,54 @@ public class ValidationConfig implements WebMvcConfigurer {
         }
 
         // Getters
-        public LocalDateTime getTimestamp() { return timestamp; }
-        public int getStatus() { return status; }
-        public String getError() { return error; }
-        public String getMessage() { return message; }
-        public String getPath() { return path; }
-        public Map<String, String> getValidationErrors() { return validationErrors; }
+        public LocalDateTime getTimestamp() {
+            return timestamp;
+        }
+
+        public int getStatus() {
+            return status;
+        }
+
+        public String getError() {
+            return error;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public String getPath() {
+            return path;
+        }
+
+        public Map<String, String> getValidationErrors() {
+            return validationErrors;
+        }
 
         // Setters
-        public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
-        public void setStatus(int status) { this.status = status; }
-        public void setError(String error) { this.error = error; }
-        public void setMessage(String message) { this.message = message; }
-        public void setPath(String path) { this.path = path; }
-        public void setValidationErrors(Map<String, String> validationErrors) { this.validationErrors = validationErrors; }
+        public void setTimestamp(LocalDateTime timestamp) {
+            this.timestamp = timestamp;
+        }
+
+        public void setStatus(int status) {
+            this.status = status;
+        }
+
+        public void setError(String error) {
+            this.error = error;
+        }
+
+        public void setMessage(String message) {
+            this.message = message;
+        }
+
+        public void setPath(String path) {
+            this.path = path;
+        }
+
+        public void setValidationErrors(Map<String, String> validationErrors) {
+            this.validationErrors = validationErrors;
+        }
 
         public static class ValidationErrorResponseBuilder {
             private LocalDateTime timestamp;
