@@ -1,5 +1,5 @@
 # Use multi-stage build for optimal image size
-FROM eclipse-temurin:17-jdk AS build
+FROM eclipse-temurin:21.0.8_9-jdk AS build
 
 # Set working directory
 WORKDIR /app
@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y maven
 RUN mvn clean package -DskipTests
 
 # Runtime stage
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:21.0.8_9-jre
 
 # Install curl for health checks
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
