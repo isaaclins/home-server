@@ -122,7 +122,7 @@
         <dependency>
             <groupId>com.github.oshi</groupId>
             <artifactId>oshi-core</artifactId>
-            <version>6.4.11</version>
+            <version>6.8.2</version>
         </dependency>
 
         <!-- Jackson for JSON processing -->
