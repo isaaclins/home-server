@@ -135,7 +135,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot_password_123 || exit 1"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
@@ -230,15 +230,14 @@ jobs:
           sudo apt-get install -y -qq mysql-client
 
       - name: Wait for MySQL to be ready
+        env:
+          MYSQL_PWD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
         run: |
           echo "Waiting for MySQL to be ready..."
-          for i in {1..30}; do
-            if mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1" >/dev/null 2>&1; then
-              echo "MySQL is ready!"
-              break
-            fi
-            echo "Waiting for MySQL... ($i/30)"
-            sleep 2
+          for i in {1..60}; do
+            if mysqladmin ping -h 127.0.0.1 -uroot >/dev/null 2>&1; then
+              echo "MySQL is ready!"; break; fi
+            echo "Waiting for MySQL... ($i/60)"; sleep 2;
           done
 
       - name: Setup MySQL user (8.0/8.4+ compatible)
@@ -254,6 +253,8 @@ jobs:
           mysql -h 127.0.0.1 -u root -e "CREATE USER IF NOT EXISTS '${SPRING_DATASOURCE_USERNAME}'@'%' ${IDENT}; GRANT ALL PRIVILEGES ON \`${{ secrets.MYSQL_DATABASE || 'homeserver' }}\`.* TO '${SPRING_DATASOURCE_USERNAME}'@'%'; FLUSH PRIVILEGES;"
 
       - name: Test database connectivity
+        env:
+          MYSQL_PWD: ${{ env.SPRING_DATASOURCE_PASSWORD }}
         run: |
           # Get the MySQL service container name
           MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
@@ -261,12 +262,12 @@ jobs:
 
           # Test connection from host
           echo "Testing connection from host:"
-          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -e "SELECT 1 as test_connection;"
 
           # Test connection from a temporary container on the same network
           echo "Testing connection from container network:"
           docker run --rm --network $(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}') \
-            mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+            -e MYSQL_PWD=$SPRING_DATASOURCE_PASSWORD mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -e "SELECT 1 as test_connection;"
 
       - name: Start backend container
         run: |
@@ -541,11 +542,10 @@ jobs:
           MYSQL_USER: ${{ secrets.MYSQL_USER || 'homeserver_app' }}
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD || 'test_password_123' }}
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
-          MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: mysql_native_password
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot_password_123 || exit 1"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
@@ -592,15 +592,14 @@ jobs:
           sudo apt-get install -y -qq mysql-client
 
       - name: Wait for MySQL to be ready
+        env:
+          MYSQL_PWD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
         run: |
           echo "Waiting for MySQL to be ready..."
-          for i in {1..30}; do
-            if mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1" >/dev/null 2>&1; then
-              echo "MySQL is ready!"
-              break
-            fi
-            echo "Waiting for MySQL... ($i/30)"
-            sleep 2
+          for i in {1..60}; do
+            if mysqladmin ping -h 127.0.0.1 -uroot >/dev/null 2>&1; then
+              echo "MySQL is ready!"; break; fi
+            echo "Waiting for MySQL... ($i/60)"; sleep 2;
           done
 
       - name: Setup MySQL user (8.0/8.4+ compatible)
@@ -616,6 +615,8 @@ jobs:
           mysql -h 127.0.0.1 -u root -e "CREATE USER IF NOT EXISTS '${SPRING_DATASOURCE_USERNAME}'@'%' ${IDENT}; GRANT ALL PRIVILEGES ON \`${{ secrets.MYSQL_DATABASE || 'homeserver' }}\`.* TO '${SPRING_DATASOURCE_USERNAME}'@'%'; FLUSH PRIVILEGES;"
 
       - name: Test database connectivity
+        env:
+          MYSQL_PWD: ${{ env.SPRING_DATASOURCE_PASSWORD }}
         run: |
           # Get the MySQL service container name
           MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
@@ -623,12 +624,12 @@ jobs:
 
           # Test connection from host
           echo "Testing connection from host:"
-          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+          mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -e "SELECT 1 as test_connection;"
 
           # Test connection from a temporary container on the same network
           echo "Testing connection from container network:"
           docker run --rm --network $(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}') \
-            mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -p$SPRING_DATASOURCE_PASSWORD -e "SELECT 1 as test_connection;"
+            -e MYSQL_PWD=$SPRING_DATASOURCE_PASSWORD mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -e "SELECT 1 as test_connection;"
 
       - name: Build backend image locally (for PRs)
         if: github.event_name == 'pull_request'
