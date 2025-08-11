@@ -241,14 +241,17 @@ jobs:
             sleep 2
           done
 
-      - name: Setup MySQL user with proper authentication
+      - name: Setup MySQL user (8.0/8.4+ compatible)
+        env:
+          MYSQL_PWD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
         run: |
-          echo "Setting up MySQL user with proper authentication..."
-          mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }} << EOF
-          CREATE USER IF NOT EXISTS '$SPRING_DATASOURCE_USERNAME'@'%' IDENTIFIED WITH mysql_native_password BY '$SPRING_DATASOURCE_PASSWORD';
-          GRANT ALL PRIVILEGES ON ${{ secrets.MYSQL_DATABASE || 'homeserver' }}.* TO '$SPRING_DATASOURCE_USERNAME'@'%';
-          FLUSH PRIVILEGES;
-          EOF
+          echo "Setting up MySQL user..."
+          if mysql -h 127.0.0.1 -u root -Nse "SELECT 1 FROM information_schema.plugins WHERE PLUGIN_NAME='mysql_native_password'" | grep -q 1; then
+            IDENT="IDENTIFIED WITH mysql_native_password BY '${SPRING_DATASOURCE_PASSWORD}'"
+          else
+            IDENT="IDENTIFIED BY '${SPRING_DATASOURCE_PASSWORD}'"
+          fi
+          mysql -h 127.0.0.1 -u root -e "CREATE USER IF NOT EXISTS '${SPRING_DATASOURCE_USERNAME}'@'%' ${IDENT}; GRANT ALL PRIVILEGES ON \`${{ secrets.MYSQL_DATABASE || 'homeserver' }}\`.* TO '${SPRING_DATASOURCE_USERNAME}'@'%'; FLUSH PRIVILEGES;"
 
       - name: Test database connectivity
         run: |
@@ -561,7 +564,7 @@ jobs:
       JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION || '86400000' }}
       SERVER_PORT: 8080
       NEXT_PUBLIC_API_URL: http://localhost:8080
-      NEXT_PUBLIC_ADMIN_SECRET: ${{ secrets.NEXT_PUBLIC_ADMIN_SECRET }}
+      NEXT_PUBLIC_ADMIN_SECRET: ${{ secrets.NEXT_PUBLIC_ADMIN_SECRET || '' }}
       ADMIN_SECRET: ${{ secrets.ADMIN_SECRET || 'changeme' }}
 
     steps:
@@ -600,14 +603,17 @@ jobs:
             sleep 2
           done
 
-      - name: Setup MySQL user with proper authentication
+      - name: Setup MySQL user (8.0/8.4+ compatible)
+        env:
+          MYSQL_PWD: ${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }}
         run: |
-          echo "Setting up MySQL user with proper authentication..."
-          mysql -h 127.0.0.1 -u root -p${{ secrets.MYSQL_ROOT_PASSWORD || 'root_password_123' }} << EOF
-          CREATE USER IF NOT EXISTS '$SPRING_DATASOURCE_USERNAME'@'%' IDENTIFIED WITH mysql_native_password BY '$SPRING_DATASOURCE_PASSWORD';
-          GRANT ALL PRIVILEGES ON ${{ secrets.MYSQL_DATABASE || 'homeserver' }}.* TO '$SPRING_DATASOURCE_USERNAME'@'%';
-          FLUSH PRIVILEGES;
-          EOF
+          echo "Setting up MySQL user..."
+          if mysql -h 127.0.0.1 -u root -Nse "SELECT 1 FROM information_schema.plugins WHERE PLUGIN_NAME='mysql_native_password'" | grep -q 1; then
+            IDENT="IDENTIFIED WITH mysql_native_password BY '${SPRING_DATASOURCE_PASSWORD}'"
+          else
+            IDENT="IDENTIFIED BY '${SPRING_DATASOURCE_PASSWORD}'"
+          fi
+          mysql -h 127.0.0.1 -u root -e "CREATE USER IF NOT EXISTS '${SPRING_DATASOURCE_USERNAME}'@'%' ${IDENT}; GRANT ALL PRIVILEGES ON \`${{ secrets.MYSQL_DATABASE || 'homeserver' }}\`.* TO '${SPRING_DATASOURCE_USERNAME}'@'%'; FLUSH PRIVILEGES;"
 
       - name: Test database connectivity
         run: |
@@ -767,7 +773,7 @@ jobs:
     # Run independently to avoid port conflicts
     env:
       NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
-      NEXT_PUBLIC_ADMIN_SECRET: ${{ secrets.NEXT_PUBLIC_ADMIN_SECRET }}
+      NEXT_PUBLIC_ADMIN_SECRET: ${{ secrets.NEXT_PUBLIC_ADMIN_SECRET || '' }}
 
     steps:
       - name: Checkout code
