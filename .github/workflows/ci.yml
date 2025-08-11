@@ -256,18 +256,8 @@ jobs:
         env:
           MYSQL_PWD: ${{ env.SPRING_DATASOURCE_PASSWORD }}
         run: |
-          # Get the MySQL service container name
-          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
-          echo "Testing connection to MySQL container: $MYSQL_CONTAINER"
-
-          # Test connection from host
           echo "Testing connection from host:"
           mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -e "SELECT 1 as test_connection;"
-
-          # Test connection from a temporary container on the same network
-          echo "Testing connection from container network:"
-          docker run --rm --network $(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}') \
-            -e MYSQL_PWD=$SPRING_DATASOURCE_PASSWORD mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -e "SELECT 1 as test_connection;"
 
       - name: Start backend container
         run: |
@@ -618,18 +608,8 @@ jobs:
         env:
           MYSQL_PWD: ${{ env.SPRING_DATASOURCE_PASSWORD }}
         run: |
-          # Get the MySQL service container name
-          MYSQL_CONTAINER=$(docker ps --filter "ancestor=mysql:8.0" --format "{{.Names}}" | head -1)
-          echo "Testing connection to MySQL container: $MYSQL_CONTAINER"
-
-          # Test connection from host
           echo "Testing connection from host:"
           mysql -h 127.0.0.1 -u $SPRING_DATASOURCE_USERNAME -e "SELECT 1 as test_connection;"
-
-          # Test connection from a temporary container on the same network
-          echo "Testing connection from container network:"
-          docker run --rm --network $(docker inspect $MYSQL_CONTAINER --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}') \
-            -e MYSQL_PWD=$SPRING_DATASOURCE_PASSWORD mysql:8.0 mysql -h $MYSQL_CONTAINER -u $SPRING_DATASOURCE_USERNAME -e "SELECT 1 as test_connection;"
 
       - name: Build backend image locally (for PRs)
         if: github.event_name == 'pull_request'
