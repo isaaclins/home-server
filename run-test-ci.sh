@@ -72,6 +72,10 @@ start_server() {
   export INITIAL_ADMIN_EMAIL="testadmin@example.com"
   export INITIAL_ADMIN_PASSWORD="testpassword"
   export ADMIN_SECRET="ci_admin_secret"
+  # Activate CI Spring profile so application-ci.properties is loaded
+  export SPRING_PROFILES_ACTIVE="ci"
+  # Ensure backend tests can read the same secret via .env
+  echo "ADMIN_SECRET=${ADMIN_SECRET}" > "$ROOT_DIR/.env"
   
   # Start Spring Boot application in background
   log "Starting Spring Boot with Maven..."
